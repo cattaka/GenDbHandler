@@ -14,6 +14,7 @@ public @interface Attribute {
 		CUSTOM,
 	}
 	
+	
 	boolean persistent() default true;
 	boolean primaryKey() default false;
 	long version() default 1;

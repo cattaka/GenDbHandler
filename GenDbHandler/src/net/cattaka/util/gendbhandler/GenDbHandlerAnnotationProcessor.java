@@ -35,6 +35,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
            List<FindEntry> findList;
            List<UniqueEntry> uniqueList;
     }
+    
     static class FieldEntry {
         boolean persistent = true;
         boolean primaryKey = false;
