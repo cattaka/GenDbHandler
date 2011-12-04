@@ -1,5 +1,6 @@
 package net.cattaka.gendbhandler.test.db;
 
+import net.cattaka.gendbhandler.test.model.handler.UserModelHandler;
 import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
@@ -12,6 +13,7 @@ public class TestOpenHelper extends SQLiteOpenHelper {
 
 	@Override
 	public void onCreate(SQLiteDatabase db) {
+		db.execSQL(UserModelHandler.SQL_CREATE_TABLE);
 	}
 
 	@Override

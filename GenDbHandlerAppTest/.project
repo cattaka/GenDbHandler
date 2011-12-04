@@ -3,7 +3,6 @@
 	<name>GenDbHandlerAppTest</name>
 	<comment></comment>
 	<projects>
-		<project>GenDbHandlerApp</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
