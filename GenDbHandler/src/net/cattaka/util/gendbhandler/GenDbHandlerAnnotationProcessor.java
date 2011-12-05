@@ -5,6 +5,7 @@ import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -96,8 +97,8 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     }
                     bundle.fieldEntryMap = feMap;
                 }
-                   bundle.findList = createFindEntries(td.getPosition(), genDbHandler.find(), bundle, messager);
-                   bundle.uniqueList = createUniqueEntries(td.getPosition(), genDbHandler.unique(), bundle, messager);
+                bundle.findList = createFindEntries(td.getPosition(), genDbHandler.find(), bundle, messager);
+                bundle.uniqueList = createUniqueEntries(td.getPosition(), genDbHandler.unique(), bundle, messager);
             }
             FieldEntry keyFieldEntry = null;
             {    // Check existence of PRIMARY KEY (Only 1 key is supported.)
@@ -166,37 +167,48 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 // Find
                 for (FindEntry findEntry : bundle.findList) {
                     if (checkUnique(findEntry, bundle.uniqueList)) {
-                        pw.println("    public static " + className + " " + createMethodName(findEntry) + "(SQLiteDatabase db" + createMethodArg(findEntry) + ") {");
-                        pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
-                        pw.println("        String[] selectionArgs = new String[]{" + createSelectionArgs(findEntry) + "};");
-                        pw.println("        Cursor cursor = db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null);");
+                        pw.println("    public static " + className + " " + createMethodName(findEntry, false) + "(SQLiteDatabase db" + createMethodArg(findEntry, true) + ") {");
+                        pw.println("        Cursor cursor = " + createMethodName(findEntry, true) + "(db" + createMethodArg(findEntry, false) + ");");
                         pw.println("        if (cursor.moveToNext()) {");
-                        pw.println("            return readCursorInner(cursor);");
+                        pw.println("            return readCursorByIndex(cursor);");
                         pw.println("        } else {");
                         pw.println("            return null;");
                         pw.println("        }");
                         pw.println("    }");
                     } else {
-                        String orderBy = createOrderBy(findEntry);
-                        pw.println("    public static java.util.List<" + className + "> " + createMethodName(findEntry) + "(SQLiteDatabase db, int limit" + createMethodArg(findEntry) + ") {");
-                        pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
-                        pw.println("        String[] selectionArgs = new String[]{" + createSelectionArgs(findEntry) + "};");
-                        pw.println("        String limitStr = (limit > 0) ? String.valueOf(limit) : null;");
-                        if (orderBy.length() > 0) {
-                            pw.println("        String orderBy = \"" + createOrderBy(findEntry) + "\";");
-                            pw.println("        Cursor cursor = db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, orderBy, limitStr);");
-                        } else {
-                            pw.println("        Cursor cursor = db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null, limitStr);");
-                        }
+                        pw.println("    public static java.util.List<" + className + "> " + createMethodName(findEntry, false) + "(SQLiteDatabase db, int limit" + createMethodArg(findEntry, true) + ") {");
+                        pw.println("        Cursor cursor = " + createMethodName(findEntry, true) + "(db, limit" + createMethodArg(findEntry, false) + ");");
                         pw.println("        java.util.List<"+className+"> result = new java.util.ArrayList<"+className+">();");
                         pw.println("        while (cursor.moveToNext()) {");
-                        pw.println("            result.add(readCursorInner(cursor));");
+                        pw.println("            result.add(readCursorByIndex(cursor));");
                         pw.println("        }");
                         pw.println("        return result;");
                         pw.println("    }");
                     }
                 }
-                pw.println("    private static "+className+" readCursorInner(Cursor cursor) {");
+                for (FindEntry findEntry : bundle.findList) {
+                    if (checkUnique(findEntry, bundle.uniqueList)) {
+                        pw.println("    public static Cursor " + createMethodName(findEntry, true) + "(SQLiteDatabase db" + createMethodArg(findEntry, true) + ") {");
+                        pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
+                        pw.println("        String[] selectionArgs = new String[]{" + createSelectionArgs(findEntry) + "};");
+                        pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null);");
+                        pw.println("    }");
+                    } else {
+                        String orderBy = createOrderBy(findEntry);
+                        pw.println("    public static Cursor " + createMethodName(findEntry, true) + "(SQLiteDatabase db, int limit" + createMethodArg(findEntry, true) + ") {");
+                        pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
+                        pw.println("        String[] selectionArgs = new String[]{" + createSelectionArgs(findEntry) + "};");
+                        pw.println("        String limitStr = (limit > 0) ? String.valueOf(limit) : null;");
+                        if (orderBy.length() > 0) {
+                            pw.println("        String orderBy = \"" + createOrderBy(findEntry) + "\";");
+                            pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, orderBy, limitStr);");
+                        } else {
+                            pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null, limitStr);");
+                        }
+                        pw.println("    }");
+                    }
+                }
+                pw.println("    public static "+className+" readCursorByIndex(Cursor cursor) {");
                 pw.println("        "+className+" result = new "+className+"();");
                 {
                     int index = 0;
@@ -207,7 +219,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 }
                 pw.println("        return result;");
                 pw.println("    }");
-                pw.println("    public static "+className+" readCursor(Cursor cursor) {");
+                pw.println("    public static "+className+" readCursorByName(Cursor cursor) {");
                 pw.println("        "+className+" result = new "+className+"();");
                 pw.println("        int idx;");
                 {
@@ -270,11 +282,15 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         sb.append(")");
         return sb.toString();
     }
-    private static String createMethodName(FindEntry findEntry) {
+    private static String createMethodName(FindEntry findEntry, boolean cursor) {
         StringBuilder sb = new StringBuilder();
         for (FieldEntry fe : findEntry.columns) {
             if (sb.length() == 0) {
-                sb.append("findBy");
+            	if (cursor) {
+            		sb.append("findCursorBy");
+            	} else {
+            		sb.append("findBy");
+            	}
             } else {
                 sb.append("And");
             }
@@ -295,12 +311,14 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         }
         return sb.toString();
     }
-    private static String createMethodArg(FindEntry findEntry) {
+    private static String createMethodArg(FindEntry findEntry, boolean withType) {
         StringBuilder sb = new StringBuilder();
         for (FieldEntry fe : findEntry.columns) {
-               sb.append(", ");
-            sb.append(convertFieldType2Java(fe));
-               sb.append(" ");
+            sb.append(", ");
+            if (withType) {
+	            sb.append(convertFieldType2Java(fe));
+	            sb.append(" ");
+            }
             sb.append(fe.name);
         }
         return sb.toString();
@@ -445,7 +463,16 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     }
     private static List<FieldEntry> pickFieldDeclaration(TypeDeclaration td, Messager messager, GenDbHandler genDbHandler) {
         List<FieldEntry> fes = new ArrayList<FieldEntry>();
-        for (FieldDeclaration fd : td.getFields()) {
+        List<FieldDeclaration> fds = new ArrayList<FieldDeclaration>(td.getFields());
+        Collections.sort(fds, new Comparator<FieldDeclaration>() {
+        	@Override
+        	public int compare(FieldDeclaration o1, FieldDeclaration o2) {
+        		int r = o1.getPosition().line() - o2.getPosition().line();
+        		return (r != 0) ? r : (o1.getPosition().column() - o2.getPosition().column());
+        	}
+		});
+        
+        for (FieldDeclaration fd : fds) {
             FieldEntry fe = new FieldEntry();
             if (fd.getModifiers().contains(Modifier.STATIC)) {
                 continue;
