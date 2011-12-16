@@ -208,28 +208,36 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                         pw.println("    }");
                     }
                 }
-                pw.println("    public static "+className+" readCursorByIndex(Cursor cursor) {");
-                pw.println("        "+className+" result = new "+className+"();");
+                pw.println("    public static void readCursorByIndex(Cursor cursor, "+className+" dest) {");
                 {
                     int index = 0;
                     for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("        result.set"+convertCap(fe.name,true)+"(!cursor.isNull("+index+") ? "+createCursorGetter("cursor", fe, String.valueOf(index))+" : null);");
+                        pw.println("        dest.set"+convertCap(fe.name,true)+"(!cursor.isNull("+index+") ? "+createCursorGetter("cursor", fe, String.valueOf(index))+" : null);");
                         index++;
                     }
                 }
+                pw.println("    }");
+                //
+                pw.println("    public static "+className+" readCursorByIndex(Cursor cursor) {");
+                pw.println("        "+className+" result = new "+className+"();");
+                pw.println("        readCursorByIndex(cursor, result);");
                 pw.println("        return result;");
                 pw.println("    }");
-                pw.println("    public static "+className+" readCursorByName(Cursor cursor) {");
-                pw.println("        "+className+" result = new "+className+"();");
+                
+                pw.println("    public static void readCursorByName(Cursor cursor, "+className+" dest) {");
                 pw.println("        int idx;");
                 {
                     int index = 0;
                     for (FieldEntry fe : bundle.fieldEntries) {
                         pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName + "\");");
-                        pw.println("        result.set"+convertCap(fe.name,true)+"(idx>0 && !cursor.isNull(idx) ? "+createCursorGetter("cursor", fe, "idx")+" : null);");
+                        pw.println("        dest.set"+convertCap(fe.name,true)+"(idx>0 && !cursor.isNull(idx) ? "+createCursorGetter("cursor", fe, "idx")+" : null);");
                         index++;
                     }
                 }
+                pw.println("    }");
+                pw.println("    public static "+className+" readCursorByName(Cursor cursor) {");
+                pw.println("        "+className+" result = new "+className+"();");
+                pw.println("        readCursorByName(cursor, result);");
                 pw.println("        return result;");
                 pw.println("    }");
                 pw.println("}");
