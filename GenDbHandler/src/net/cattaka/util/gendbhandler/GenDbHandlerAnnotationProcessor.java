@@ -702,10 +702,11 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 					fe.fieldType = FieldType.ENUM;
 				} else {
 					fe.fieldType = FieldType.STRING;
-					messager
-							.printError(
-									fd.getPosition(),
-									"Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
+					if (fe.persistent) {
+						messager.printError(
+								fd.getPosition(),
+								"Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
+					}
 				}
 				fe.fieldClass = myTypeVisitor.qualifiedName;
 			}

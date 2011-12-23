@@ -28,6 +28,9 @@ public class UserModel {
 	@Attribute(customCoder=StringArrayCoder.class, customDataType=FieldType.BLOB)
 	private List<String> tags;
 	
+	@Attribute(persistent=false)
+	private Object userData;
+	
 	public UserModel() {
 	}
 	public UserModel(Long id, String username, String nickname, String team,
@@ -82,5 +85,11 @@ public class UserModel {
 	}
 	public void setTags(List<String> tags) {
 		this.tags = tags;
+	}
+	public Object getUserData() {
+		return userData;
+	}
+	public void setUserData(Object userData) {
+		this.userData = userData;
 	}
 }
