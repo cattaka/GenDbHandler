@@ -417,17 +417,22 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
 	private static String createMethodName(FindEntry findEntry, boolean cursor) {
 		StringBuilder sb = new StringBuilder();
-		for (FieldEntry fe : findEntry.columns) {
-			if (sb.length() == 0) {
-				if (cursor) {
-					sb.append("findCursorBy");
+		if (cursor) {
+			sb.append("findCursor");
+		} else {
+			sb.append("find");
+		}
+		{
+			boolean firstFlag = true;
+			for (FieldEntry fe : findEntry.columns) {
+				if (firstFlag) {
+					sb.append("By");
+					firstFlag = false;
 				} else {
-					sb.append("findBy");
+					sb.append("And");
 				}
-			} else {
-				sb.append("And");
+				sb.append(convertCap(fe.name, true));
 			}
-			sb.append(convertCap(fe.name, true));
 		}
 		if (findEntry.orderBy.size() > 0) {
 			boolean firstFlag = true;
@@ -517,6 +522,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
 	private static boolean checkUnique(FindEntry findEntry,
 			List<UniqueEntry> uniqueEntries) {
+		if (findEntry.columns.size() == 0) {
+			return false;
+		}
 		String targetStr = toSortedString(findEntry.columns);
 		for (UniqueEntry uniqueEntry : uniqueEntries) {
 			String uniqueStr = toSortedString(uniqueEntry.columns);
@@ -575,16 +583,18 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
 	private static List<FieldEntry> createFieldList(SourcePosition sp,
 			String src, EnvironmentBundle bundle, Messager messager) {
-		String[] names = src.split(",");
 		List<FieldEntry> fieldEntries = new ArrayList<FieldEntry>();
-		for (String name : names) {
-			name = name.trim();
-			FieldEntry fe = bundle.fieldEntryMap.get(name);
-			if (fe != null) {
-				fieldEntries.add(fe);
-			} else {
-				messager.printError(sp, "Field '" + name
-						+ "' in fields is not found.");
+		if (src != null && src.length() > 0) {
+			String[] names = src.split(",");
+			for (String name : names) {
+				name = name.trim();
+				FieldEntry fe = bundle.fieldEntryMap.get(name);
+				if (fe != null) {
+					fieldEntries.add(fe);
+				} else {
+					messager.printError(sp, "Field '" + name
+							+ "' in fields is not found.");
+				}
 			}
 		}
 		return fieldEntries;

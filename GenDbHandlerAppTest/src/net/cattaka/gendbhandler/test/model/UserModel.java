@@ -6,7 +6,7 @@ import net.cattaka.util.gendbhandler.Attribute;
 import net.cattaka.util.gendbhandler.GenDbHandler;
 import net.cattaka.util.gendbhandler.Attribute.FieldType;
 @GenDbHandler(
-		find={"id","username","team:role+,id","team:id-"},
+		find={"id","username","team:role+,id","team:id-",":id"},
 		unique={"username"}
 )
 public class UserModel {
