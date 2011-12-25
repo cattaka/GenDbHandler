@@ -240,11 +240,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 						pw.println("        Cursor cursor = "
 								+ createMethodName(findEntry, true) + "(db"
 								+ createMethodArg(findEntry, false) + ");");
-						pw.println("        if (cursor.moveToNext()) {");
-						pw.println("            return readCursorByIndex(cursor);");
-						pw.println("        } else {");
-						pw.println("            return null;");
-						pw.println("        }");
+						pw.println("        " + className + " model = (cursor.moveToNext()) ? readCursorByIndex(cursor) : null;");
+						pw.println("        cursor.close();");
+						pw.println("        return model;");
 						pw.println("    }");
 					} else {
 						pw.println("    public static java.util.List<"
@@ -262,6 +260,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 						pw.println("        while (cursor.moveToNext()) {");
 						pw.println("            result.add(readCursorByIndex(cursor));");
 						pw.println("        }");
+						pw.println("        cursor.close();");
 						pw.println("        return result;");
 						pw.println("    }");
 					}
