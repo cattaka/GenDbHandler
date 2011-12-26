@@ -207,7 +207,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 				pw.println("        return key;");
 				pw.println("    }");
 				// Update
-				pw.println("    public static long update(SQLiteDatabase db, "
+				pw.println("    public static int update(SQLiteDatabase db, "
 						+ className + " model) {");
 				pw.println("        ContentValues values = new ContentValues();");
 				pw.println("        String whereClause = \""
@@ -223,7 +223,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 				pw.println("        return db.update(TABLE_NAME, values, whereClause, whereArgs);");
 				pw.println("    }");
 				// Delete
-				pw.println("    public static long delete(SQLiteDatabase db, "
+				pw.println("    public static int delete(SQLiteDatabase db, "
 						+ convertFieldType2Java(keyFieldEntry) + " key) {");
 				pw.println("        String whereClause = \""
 						+ keyFieldEntry.columnName + "=?\";");
