@@ -7,6 +7,7 @@ import java.util.List;
 
 import net.cattaka.gendbhandler.test.db.TestOpenHelper;
 import net.cattaka.gendbhandler.test.model.UserModel;
+import net.cattaka.gendbhandler.test.model.UserModel.Authority;
 import net.cattaka.gendbhandler.test.model.UserModel.Role;
 import net.cattaka.gendbhandler.test.model.handler.UserModelHandler;
 import android.database.sqlite.SQLiteDatabase;
@@ -36,7 +37,7 @@ public class GenDbHandlerTest extends AndroidTestCase {
 				List<String> tags = new ArrayList<String>();
 				tags.add("Java");
 				tags.add("PHP");
-				model = new UserModel(null, "taro", "Taro Yamada", "A", Role.PROGRAMMER, new Date(), tags);
+				model = new UserModel(null, "taro", "Taro Yamada", "A", Role.PROGRAMMER, new Date(), tags, Authority.ADMIN);
 			}
 			UserModelHandler.insert(db, model);
 			UserModel model2 = UserModelHandler.findByUsername(db, "taro");
@@ -48,6 +49,7 @@ public class GenDbHandlerTest extends AndroidTestCase {
 			assertEquals(model.getTags().size(), model2.getTags().size());
 			assertEquals("Java", model2.getTags().get(0));
 			assertEquals("PHP", model2.getTags().get(1));
+            assertEquals(Authority.ADMIN, model2.getAuthority());
 		}
 		{	// Update
 			UserModel model = UserModelHandler.findByUsername(db, "taro");
@@ -86,10 +88,10 @@ public class GenDbHandlerTest extends AndroidTestCase {
 	}
 	public void testFind() {
 		SQLiteDatabase db = mHelper.getWritableDatabase();
-		UserModelHandler.insert(db, new UserModel(null, "taro", "Taro Yamada", "A", Role.PROGRAMMER, new Date(), null));
-		UserModelHandler.insert(db, new UserModel(null, "hana", "Hana Yamada", "A", Role.DESIGNNER, new Date(), null));
-		UserModelHandler.insert(db, new UserModel(null, "yuji", "Yuji Tanaka", "B", Role.PROGRAMMER, new Date(), null));
-		UserModelHandler.insert(db, new UserModel(null, "chun", "Chun Tanaka", "B", Role.DESIGNNER, new Date(), null));
+		UserModelHandler.insert(db, new UserModel(null, "taro", "Taro Yamada", "A", Role.PROGRAMMER, new Date(), null, Authority.ADMIN));
+		UserModelHandler.insert(db, new UserModel(null, "hana", "Hana Yamada", "A", Role.DESIGNNER, new Date(), null, Authority.ADMIN));
+		UserModelHandler.insert(db, new UserModel(null, "yuji", "Yuji Tanaka", "B", Role.PROGRAMMER, new Date(), null, Authority.ADMIN));
+		UserModelHandler.insert(db, new UserModel(null, "chun", "Chun Tanaka", "B", Role.DESIGNNER, new Date(), null, Authority.USER));
 		{	// findById
 			UserModel model = UserModelHandler.findById(db, 2L);
 			assertEquals("hana", model.getUsername());
@@ -110,5 +112,12 @@ public class GenDbHandlerTest extends AndroidTestCase {
 			assertEquals("chun", models.get(0).getUsername());
 			assertEquals("yuji", models.get(1).getUsername());
 		}
+        {   // findByTeamOrderByRoleAscAndIdDesc
+            List<UserModel> models = UserModelHandler.findByAuthorityOrderByIdAsc(db, 0, Authority.ADMIN);
+            assertEquals(3, models.size());
+            assertEquals("taro", models.get(0).getUsername());
+            assertEquals("hana", models.get(1).getUsername());
+            assertEquals("yuji", models.get(2).getUsername());
+        }
 	}
 }

@@ -348,7 +348,10 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 				pw.println("        readCursorByName(cursor, result);");
 				pw.println("        return result;");
 				pw.println("    }");
-				pw.println("}");
+                pw.println("    public static String toStringValue(Object arg) {");
+                pw.println("        return (arg != null) ? arg.toString() : null;");
+                pw.println("    }");
+                pw.println("}");
 				pw.close();
 			} catch (IOException ioe) {
 				ioe.printStackTrace();
@@ -454,7 +457,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 		for (FieldEntry fe : findEntry.columns) {
 			sb.append(", ");
 			if (withType) {
-				sb.append(convertFieldType2Java(fe));
+				sb.append(fe.fieldClass);
 				sb.append(" ");
 			}
 			sb.append(fe.name);
@@ -765,8 +768,13 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 		case ENUM:
 			return "((" + src + " != null) ? " + src + ".name() : null)";
 		case CUSTOM:
-			return "((" + src + " != null) ? " + fieldEntry.customParser
-					+ ".encode(" + src + ") : null)";
+		    if (withToString) {
+    			return "((" + src + " != null) ? toStringValue(" + fieldEntry.customParser
+    					+ ".encode(" + src + ")) : null)";
+		    } else {
+                return "((" + src + " != null) ? " + fieldEntry.customParser
+                    + ".encode(" + src + ") : null)";
+		    }
 		case INTEGER:
 		case SHORT:
 		case LONG:
