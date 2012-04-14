@@ -94,6 +94,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 				.getTypeDeclarations();
 		for (TypeDeclaration td : tds) {
 			GenDbHandler genDbHandler = td.getAnnotation(GenDbHandler.class);
+			if (genDbHandler == null) {
+			    continue;
+			}
 			String packageName = td.getPackage().getQualifiedName();
 			String className = td.getSimpleName();
 			String cprPackageName = packageName + ".handler";
