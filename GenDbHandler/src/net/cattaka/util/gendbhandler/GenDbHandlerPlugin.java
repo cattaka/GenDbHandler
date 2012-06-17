@@ -1,3 +1,4 @@
+
 package net.cattaka.util.gendbhandler;
 
 import org.eclipse.core.runtime.Plugin;
@@ -7,40 +8,41 @@ import org.osgi.framework.BundleContext;
  * The main plugin class to be used in the desktop.
  */
 public class GenDbHandlerPlugin extends Plugin {
-	//The shared instance.
-	private static GenDbHandlerPlugin plugin;
-	//Resource bundle.
-	// private ResourceBundle resourceBundle;
-	
-	/**
-	 * The constructor.
-	 */
-	public GenDbHandlerPlugin() {
-		super();
-		plugin = this;
-	}
+    // The shared instance.
+    private static GenDbHandlerPlugin plugin;
 
-	/**
-	 * This method is called upon plug-in activation
-	 */
-	public void start(BundleContext context) throws Exception {
-		super.start(context);
-	}
+    // Resource bundle.
+    // private ResourceBundle resourceBundle;
 
-	/**
-	 * This method is called when the plug-in is stopped
-	 */
-	public void stop(BundleContext context) throws Exception {
-		super.stop(context);
-		plugin = null;
-		//resourceBundle = null;
-	}
+    /**
+     * The constructor.
+     */
+    public GenDbHandlerPlugin() {
+        super();
+        plugin = this;
+    }
 
-	/**
-	 * Returns the shared instance.
-	 */
-	public static GenDbHandlerPlugin getDefault() {
-		return plugin;
-	}
+    /**
+     * This method is called upon plug-in activation
+     */
+    public void start(BundleContext context) throws Exception {
+        super.start(context);
+    }
+
+    /**
+     * This method is called when the plug-in is stopped
+     */
+    public void stop(BundleContext context) throws Exception {
+        super.stop(context);
+        plugin = null;
+        // resourceBundle = null;
+    }
+
+    /**
+     * Returns the shared instance.
+     */
+    public static GenDbHandlerPlugin getDefault() {
+        return plugin;
+    }
 
 }

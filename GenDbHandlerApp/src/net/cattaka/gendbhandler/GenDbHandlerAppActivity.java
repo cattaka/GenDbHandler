@@ -1,3 +1,4 @@
+
 package net.cattaka.gendbhandler;
 
 import android.app.Activity;
