@@ -23,9 +23,11 @@ import com.sun.mirror.apt.Messager;
 import com.sun.mirror.declaration.FieldDeclaration;
 import com.sun.mirror.declaration.Modifier;
 import com.sun.mirror.declaration.TypeDeclaration;
+import com.sun.mirror.type.ArrayType;
 import com.sun.mirror.type.DeclaredType;
 import com.sun.mirror.type.EnumType;
 import com.sun.mirror.type.MirroredTypeException;
+import com.sun.mirror.type.PrimitiveType;
 import com.sun.mirror.type.TypeMirror;
 import com.sun.mirror.util.SimpleTypeVisitor;
 import com.sun.mirror.util.SourcePosition;
@@ -324,14 +326,14 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                         + " dest) {");
                 pw.println("        int idx;");
                 {
-                    int index = 0;
+                    //int index = 0;
                     for (FieldEntry fe : bundle.fieldEntries) {
                         pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName
                                 + "\");");
                         pw.println("        dest.set" + convertCap(fe.name, true)
                                 + "(idx>0 && !cursor.isNull(idx) ? "
                                 + createCursorGetter("cursor", fe, "idx") + " : null);");
-                        index++;
+                        //index++;
                     }
                 }
                 pw.println("    }");
@@ -651,6 +653,8 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 class MyTypeVisitor extends SimpleTypeVisitor {
                     private String qualifiedName;
 
+                    private boolean primitiveFlag = false;
+                    private boolean arrayFlag = false;
                     private boolean enumFlag = false;
 
                     @Override
@@ -664,39 +668,71 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                         super.visitEnumType(t);
                         this.enumFlag = true;
                     }
+                    @Override
+                    public void visitArrayType(ArrayType t) {
+                        super.visitArrayType(t);
+                        TypeMirror type = t.getComponentType();
+                        arrayFlag = true;
+                        if (type instanceof PrimitiveType) {
+                            primitiveFlag = true;
+                            qualifiedName = getPrimitiveTypeClassName((PrimitiveType)type);
+                        } else if (type instanceof DeclaredType) {
+                            qualifiedName = ((DeclaredType)type).getDeclaration().getQualifiedName();
+                        }
+                    }
+                    @Override
+                    public void visitPrimitiveType(PrimitiveType t) {
+                        super.visitPrimitiveType(t);
+                        primitiveFlag = true;
+                        qualifiedName = getPrimitiveTypeClassName(t);
+                    }
                 }
                 MyTypeVisitor myTypeVisitor = new MyTypeVisitor();
                 TypeMirror typeMirror = fd.getType();
                 typeMirror.accept(myTypeVisitor);
-                if (myTypeVisitor.qualifiedName == null) {
-                    fe.fieldType = FieldType.STRING;
-                    messager.printError(fd.getPosition(), "Unknown data type.");
-                } else if (fe.customParser != null
+                if (fe.customParser != null
                         && !Object.class.getName().equals(fe.customParser)) {
                     fe.fieldType = FieldType.CUSTOM;
-                } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.INTEGER;
-                } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.SHORT;
-                } else if (Long.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.LONG;
-                } else if (Float.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.FLOAT;
-                } else if (Double.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.DOUBLE;
-                } else if (String.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.STRING;
-                } else if (byte[].class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.BLOB;
-                } else if (Date.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                    fe.fieldType = FieldType.DATE;
-                } else if (myTypeVisitor.enumFlag) {
-                    fe.fieldType = FieldType.ENUM;
-                } else {
-                    fe.fieldType = FieldType.STRING;
-                    if (fe.persistent) {
+                } else if (myTypeVisitor.arrayFlag) {
+                    if (byte.class.getCanonicalName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.BLOB;
+                    } else {
+                        // not supported
                         messager.printError(fd.getPosition(),
-                                "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
+                                "Array type is not supported. set persistent=false, or use @customCoder and @customDataType");
+                    }
+                } else if (myTypeVisitor.primitiveFlag) {
+                    // not supported
+                    messager.printError(fd.getPosition(),
+                            "Primitive type is not supported. set persistent=false, or use @customCoder and @customDataType");
+                } else {
+                    if (myTypeVisitor.qualifiedName == null) {
+                        fe.fieldType = FieldType.STRING;
+                        messager.printError(fd.getPosition(), "Unknown data type.");
+                    } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.INTEGER;
+                    } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.SHORT;
+                    } else if (Long.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.LONG;
+                    } else if (Float.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.FLOAT;
+                    } else if (Double.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.DOUBLE;
+                    } else if (String.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.STRING;
+                    } else if (byte[].class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.BLOB;
+                    } else if (Date.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.DATE;
+                    } else if (myTypeVisitor.enumFlag) {
+                        fe.fieldType = FieldType.ENUM;
+                    } else {
+                        fe.fieldType = FieldType.STRING;
+                        if (fe.persistent) {
+                            messager.printError(fd.getPosition(),
+                                    "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
+                        }
                     }
                 }
                 fe.fieldClass = myTypeVisitor.qualifiedName;
@@ -719,6 +755,30 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         return fes;
     }
 
+    private static String getPrimitiveTypeClassName(PrimitiveType t) {
+        if (t != null) {
+            switch(t.getKind()) {
+                case BOOLEAN:
+                    return boolean.class.getCanonicalName();
+                case BYTE:
+                    return byte.class.getCanonicalName();
+                case SHORT:
+                    return short.class.getCanonicalName();
+                case INT:
+                    return int.class.getCanonicalName();
+                case LONG:
+                    return long.class.getCanonicalName();
+                case CHAR:
+                    return char.class.getCanonicalName();
+                case FLOAT:
+                    return float.class.getCanonicalName();
+                case DOUBLE:
+                    return double.class.getCanonicalName();
+            }
+        }
+        return null;
+    }
+    
     private static String convertGetter(String varName, FieldEntry fieldEntry) {
         String getter = varName + ".get" + convertCap(fieldEntry.name, true) + "()";
         return convertInnerType(getter, fieldEntry, false);
