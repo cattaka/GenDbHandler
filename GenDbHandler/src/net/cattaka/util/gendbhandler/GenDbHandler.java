@@ -16,4 +16,7 @@ public @interface GenDbHandler {
     String[] find() default {};
 
     String[] unique() default {};
+    
+    boolean columnIndexConstants() default true;
+    boolean columnNameConstants() default true;
 }

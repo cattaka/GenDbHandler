@@ -40,7 +40,7 @@ public class GenDbHandlerTest extends AndroidTestCase {
                 tags.add("Java");
                 tags.add("PHP");
                 model = new UserModel(null, "taro", "Taro Yamada", "A", Role.PROGRAMMER,
-                        new Date(), tags, Authority.ADMIN);
+                        new Date(), tags, Authority.ADMIN, new byte[] {1,2});
             }
             UserModelHandler.insert(db, model);
             UserModel model2 = UserModelHandler.findByUsername(db, "taro");
@@ -53,6 +53,9 @@ public class GenDbHandlerTest extends AndroidTestCase {
             assertEquals("Java", model2.getTags().get(0));
             assertEquals("PHP", model2.getTags().get(1));
             assertEquals(Authority.ADMIN, model2.getAuthority());
+            assertNotNull(model2.getBlob());
+            assertEquals((byte) 1,model2.getBlob()[0]);
+            assertEquals((byte) 2,model2.getBlob()[1]);
         }
         { // Update
             UserModel model = UserModelHandler.findByUsername(db, "taro");
@@ -67,6 +70,7 @@ public class GenDbHandlerTest extends AndroidTestCase {
                 model.setRole(Role.MANAGER);
                 model.setCreatedAt(new Date());
                 model.setTags(tags);
+                model.setBlob(null);
             }
             long n = UserModelHandler.update(db, model);
             assertEquals(1L, n);
@@ -79,6 +83,7 @@ public class GenDbHandlerTest extends AndroidTestCase {
             assertEquals(model.getTags().size(), model2.getTags().size());
             assertEquals("Java", model2.getTags().get(0));
             assertEquals("PHP", model2.getTags().get(1));
+            assertNull(model2.getBlob());
         }
         { // delete
             UserModel model = UserModelHandler.findByUsername(db, "taro2");

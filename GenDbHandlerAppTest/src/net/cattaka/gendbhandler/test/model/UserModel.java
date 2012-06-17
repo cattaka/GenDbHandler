@@ -48,6 +48,8 @@ public class UserModel {
     @Attribute(persistent = false)
     private Object userData;
 
+    private byte[] blob;
+    
     public UserModel() {
     }
 
@@ -62,6 +64,12 @@ public class UserModel {
         this.createdAt = createdAt;
         this.tags = tags;
         this.authority = authority;
+    }
+
+    public UserModel(Long id, String username, String nickname, String team, Role role,
+            Date createdAt, List<String> tags, Authority authority, byte[] blob) {
+        this(id, username, nickname, team, role, createdAt, tags, authority);
+        this.blob = blob;
     }
 
     public Long getId() {
@@ -135,4 +143,13 @@ public class UserModel {
     public void setAuthority(Authority authority) {
         this.authority = authority;
     }
+
+    public byte[] getBlob() {
+        return blob;
+    }
+
+    public void setBlob(byte[] blob) {
+        this.blob = blob;
+    }
+    
 }

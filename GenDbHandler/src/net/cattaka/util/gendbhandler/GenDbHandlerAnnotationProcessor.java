@@ -64,6 +64,8 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
         String columnName = null;
 
+        String constantsColumnName = null;
+
         FieldType fieldType = FieldType.STRING;
 
         String fieldClass;
@@ -201,6 +203,19 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 pw.println("    public static final String[] COLUMNS_ARRAY = new String[] {"
                         + createColumnsArray(bundle) + "};");
 
+                if (genDbHandler.columnIndexConstants()) {
+                    int index = 0;
+                    for (FieldEntry fe : bundle.fieldEntries) {
+                        pw.println("    public static final int COL_INDEX_" + fe.constantsColumnName + " = "+ index +";");
+                        index++;
+                    }
+                }
+                if (genDbHandler.columnNameConstants()) {
+                    for (FieldEntry fe : bundle.fieldEntries) {
+                        pw.println("    public static final String COL_NAME_" + fe.constantsColumnName + " = \"" + fe.columnName + "\";");
+                    }
+                }
+                
                 // Insert
                 pw.println("    public static long insert(SQLiteDatabase db, " + className
                         + " model) {");
@@ -745,6 +760,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             {
                 fe.name = fd.getSimpleName();
                 fe.columnName = convertName(genDbHandler.fieldNamingConventions(), fe.name);
+                fe.constantsColumnName = convertName(NamingConventions.UPPER_COMPOSITE, fe.name);
             }
             if (fe.persistent) {
                 fes.add(fe);
