@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Generate DB Handler
 Bundle-SymbolicName: GenDbHandler;singleton:=true
-Bundle-Version: 0.9.7
+Bundle-Version: 0.9.8
 Require-Bundle: org.eclipse.core.runtime,
  org.eclipse.jdt.apt.core
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6

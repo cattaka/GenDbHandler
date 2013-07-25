@@ -206,16 +206,18 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 if (genDbHandler.columnIndexConstants()) {
                     int index = 0;
                     for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("    public static final int COL_INDEX_" + fe.constantsColumnName + " = "+ index +";");
+                        pw.println("    public static final int COL_INDEX_"
+                                + fe.constantsColumnName + " = " + index + ";");
                         index++;
                     }
                 }
                 if (genDbHandler.columnNameConstants()) {
                     for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("    public static final String COL_NAME_" + fe.constantsColumnName + " = \"" + fe.columnName + "\";");
+                        pw.println("    public static final String COL_NAME_"
+                                + fe.constantsColumnName + " = \"" + fe.columnName + "\";");
                     }
                 }
-                
+
                 // Insert
                 pw.println("    public static long insert(SQLiteDatabase db, " + className
                         + " model) {");
@@ -341,14 +343,14 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                         + " dest) {");
                 pw.println("        int idx;");
                 {
-                    //int index = 0;
+                    // int index = 0;
                     for (FieldEntry fe : bundle.fieldEntries) {
                         pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName
                                 + "\");");
                         pw.println("        dest.set" + convertCap(fe.name, true)
-                                + "(idx>0 && !cursor.isNull(idx) ? "
+                                + "(idx>=0 && !cursor.isNull(idx) ? "
                                 + createCursorGetter("cursor", fe, "idx") + " : null);");
-                        //index++;
+                        // index++;
                     }
                 }
                 pw.println("    }");
@@ -669,7 +671,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     private String qualifiedName;
 
                     private boolean primitiveFlag = false;
+
                     private boolean arrayFlag = false;
+
                     private boolean enumFlag = false;
 
                     @Override
@@ -683,6 +687,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                         super.visitEnumType(t);
                         this.enumFlag = true;
                     }
+
                     @Override
                     public void visitArrayType(ArrayType t) {
                         super.visitArrayType(t);
@@ -692,9 +697,11 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                             primitiveFlag = true;
                             qualifiedName = getPrimitiveTypeClassName((PrimitiveType)type);
                         } else if (type instanceof DeclaredType) {
-                            qualifiedName = ((DeclaredType)type).getDeclaration().getQualifiedName();
+                            qualifiedName = ((DeclaredType)type).getDeclaration()
+                                    .getQualifiedName();
                         }
                     }
+
                     @Override
                     public void visitPrimitiveType(PrimitiveType t) {
                         super.visitPrimitiveType(t);
@@ -705,8 +712,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 MyTypeVisitor myTypeVisitor = new MyTypeVisitor();
                 TypeMirror typeMirror = fd.getType();
                 typeMirror.accept(myTypeVisitor);
-                if (fe.customParser != null
-                        && !Object.class.getName().equals(fe.customParser)) {
+                if (fe.customParser != null && !Object.class.getName().equals(fe.customParser)) {
                     fe.fieldType = FieldType.CUSTOM;
                 } else if (myTypeVisitor.arrayFlag) {
                     if (byte.class.getCanonicalName().equals(myTypeVisitor.qualifiedName)) {
@@ -773,7 +779,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     private static String getPrimitiveTypeClassName(PrimitiveType t) {
         if (t != null) {
-            switch(t.getKind()) {
+            switch (t.getKind()) {
                 case BOOLEAN:
                     return boolean.class.getCanonicalName();
                 case BYTE:
@@ -794,7 +800,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         }
         return null;
     }
-    
+
     private static String convertGetter(String varName, FieldEntry fieldEntry) {
         String getter = varName + ".get" + convertCap(fieldEntry.name, true) + "()";
         return convertInnerType(getter, fieldEntry, false);
