@@ -3,7 +3,7 @@ package net.cattaka.util.gendbhandler;
 
 public @interface Attribute {
     public enum FieldType {
-        INTEGER, SHORT, LONG, FLOAT, DOUBLE, STRING, BLOB, DATE, ENUM, CUSTOM,
+        BOOLEAN, BYTE, CHAR, INTEGER, SHORT, LONG, FLOAT, DOUBLE, STRING, BLOB, DATE, ENUM, CUSTOM,
     }
 
     boolean persistent() default true;

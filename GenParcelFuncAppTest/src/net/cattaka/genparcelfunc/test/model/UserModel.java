@@ -56,6 +56,12 @@ public class UserModel implements Parcelable {
 
     private byte[] blob;
 
+    private Boolean booleanData;
+
+    private Byte byteData;
+
+    private Character charData;
+
     public UserModel() {
     }
 
@@ -73,9 +79,21 @@ public class UserModel implements Parcelable {
     }
 
     public UserModel(Long id, String username, String nickname, String team, Role role,
-            Date createdAt, List<String> tags, Authority authority, byte[] blob) {
-        this(id, username, nickname, team, role, createdAt, tags, authority);
+            Date createdAt, List<String> tags, Authority authority, byte[] blob,
+            Boolean booleanData, Byte byteData, Character charData) {
+        super();
+        this.id = id;
+        this.username = username;
+        this.nickname = nickname;
+        this.team = team;
+        this.role = role;
+        this.createdAt = createdAt;
+        this.tags = tags;
+        this.authority = authority;
         this.blob = blob;
+        this.booleanData = booleanData;
+        this.byteData = byteData;
+        this.charData = charData;
     }
 
     public Long getId() {
@@ -156,6 +174,30 @@ public class UserModel implements Parcelable {
 
     public void setBlob(byte[] blob) {
         this.blob = blob;
+    }
+
+    public Boolean getBooleanData() {
+        return booleanData;
+    }
+
+    public void setBooleanData(Boolean booleanData) {
+        this.booleanData = booleanData;
+    }
+
+    public Byte getByteData() {
+        return byteData;
+    }
+
+    public void setByteData(Byte byteData) {
+        this.byteData = byteData;
+    }
+
+    public Character getCharData() {
+        return charData;
+    }
+
+    public void setCharData(Character charData) {
+        this.charData = charData;
     }
 
 }

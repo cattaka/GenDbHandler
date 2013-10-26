@@ -292,6 +292,12 @@ public class GenParcelFuncAnnotationProcessor implements AnnotationProcessor {
                     if (myTypeVisitor.qualifiedName == null) {
                         fe.fieldType = FieldType.STRING;
                         messager.printError(fd.getPosition(), "Unknown data type.");
+                    } else if (Boolean.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.BOOLEAN;
+                    } else if (Byte.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.BYTE;
+                    } else if (Character.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.CHAR;
                     } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
                         fe.fieldType = FieldType.INTEGER;
                     } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {

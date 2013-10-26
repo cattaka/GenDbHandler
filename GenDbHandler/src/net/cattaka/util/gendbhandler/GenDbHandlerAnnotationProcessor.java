@@ -730,6 +730,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     if (myTypeVisitor.qualifiedName == null) {
                         fe.fieldType = FieldType.STRING;
                         messager.printError(fd.getPosition(), "Unknown data type.");
+                    } else if (Boolean.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.BOOLEAN;
+                    } else if (Byte.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.BYTE;
+                    } else if (Character.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                        fe.fieldType = FieldType.CHAR;
                     } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
                         fe.fieldType = FieldType.INTEGER;
                     } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {
@@ -803,6 +809,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     private static String convertGetter(String varName, FieldEntry fieldEntry) {
         String getter = varName + ".get" + convertCap(fieldEntry.name, true) + "()";
+        if (fieldEntry.fieldType == FieldType.CHAR) {
+            getter = "((" + getter + " != null) ? Integer.valueOf(" + getter + ")  : null)";
+        }
         return convertInnerType(getter, fieldEntry, false);
     }
 
@@ -830,6 +839,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     return "((" + src + " != null) ? " + fieldEntry.customParser + ".encode(" + src
                             + ") : null)";
                 }
+            case BOOLEAN:
+            case BYTE:
+            case CHAR:
             case INTEGER:
             case SHORT:
             case LONG:
@@ -856,6 +868,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     private static String convertFieldType2DbType(FieldType fieldType) {
         switch (fieldType) {
+            case BOOLEAN:
+            case BYTE:
+            case CHAR:
             case INTEGER:
             case SHORT:
             case LONG:
@@ -889,6 +904,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     private static String convertFieldType2Java(FieldType fieldType) {
         switch (fieldType) {
+            case BOOLEAN:
+                return "Boolean";
+            case BYTE:
+                return "Byte";
+            case CHAR:
+                return "Character";
             case INTEGER:
                 return "Integer";
             case SHORT:
@@ -927,6 +948,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     private static String createCursorGetter(String varName, FieldType fieldType, String index) {
         switch (fieldType) {
+            case BOOLEAN:
+                return "(" + varName + ".getInt(" + index + ") != 0)";
+            case BYTE:
+                return "((byte)" + varName + ".getInt(" + index + "))";
+            case CHAR:
+                return "((char)" + varName + ".getInt(" + index + "))";
             case INTEGER:
                 return varName + ".getInt(" + index + ")";
             case SHORT:

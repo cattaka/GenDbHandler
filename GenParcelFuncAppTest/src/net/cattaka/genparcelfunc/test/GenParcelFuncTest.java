@@ -57,7 +57,7 @@ public class GenParcelFuncTest extends AndroidTestCase {
                 model = new UserModel(null, "taro", "Taro Yamada", "A", Role.PROGRAMMER,
                         new Date(), tags, Authority.ADMIN, new byte[] {
                                 1, 2
-                        });
+                        }, true, (byte)123, 'C');
             }
             byte[] data;
             {
@@ -85,6 +85,9 @@ public class GenParcelFuncTest extends AndroidTestCase {
             assertEquals(Authority.ADMIN, model2.getAuthority());
             assertNotNull(model2.getBlob());
             MoreAsserts.assertEquals(model.getBlob(), model2.getBlob());
+            assertEquals(true, model2.getBooleanData().booleanValue());
+            assertEquals((byte)123, model2.getByteData().byteValue());
+            assertEquals('C', model2.getCharData().charValue());
         }
     }
 }
