@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.0"?>
+<plugin>
+   <extension
+         point="org.eclipse.jdt.apt.core.annotationProcessorFactory">
+      <factories enableDefault="true">
+	      <factory
+	         class="net.cattaka.util.genparcelfunc.GenParcelFuncAnnotationProcessorFactory">
+	      </factory>
+      </factories>  
+   </extension>
+</plugin>
