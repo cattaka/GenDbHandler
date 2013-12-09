@@ -274,7 +274,9 @@ public class GenParcelFuncAnnotationProcessor implements AnnotationProcessor {
                 MyTypeVisitor myTypeVisitor = new MyTypeVisitor();
                 TypeMirror typeMirror = fd.getType();
                 typeMirror.accept(myTypeVisitor);
-                if (fe.customParser != null && !Object.class.getName().equals(fe.customParser)) {
+                if (!fe.persistent) {
+                	// ignore
+                } else if (fe.customParser != null && !Object.class.getName().equals(fe.customParser)) {
                     fe.fieldType = FieldType.CUSTOM;
                 } else if (myTypeVisitor.arrayFlag) {
                     if (byte.class.getCanonicalName().equals(myTypeVisitor.qualifiedName)) {
@@ -318,10 +320,8 @@ public class GenParcelFuncAnnotationProcessor implements AnnotationProcessor {
                         fe.fieldType = FieldType.ENUM;
                     } else {
                         fe.fieldType = FieldType.STRING;
-                        if (fe.persistent) {
-                            messager.printError(fd.getPosition(),
-                                    "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
-                        }
+                        messager.printError(fd.getPosition(),
+                                "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
                     }
                 }
                 fe.fieldClass = myTypeVisitor.qualifiedName;
