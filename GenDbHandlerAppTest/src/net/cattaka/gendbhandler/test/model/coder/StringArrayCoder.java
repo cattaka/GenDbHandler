@@ -11,6 +11,9 @@ import java.util.List;
 
 public class StringArrayCoder {
     public static byte[] encode(List<String> arg) {
+        if (arg == null) {
+            return null;
+        }
         try {
             ByteArrayOutputStream bout = new ByteArrayOutputStream();
             DataOutputStream dout = new DataOutputStream(bout);
@@ -26,6 +29,9 @@ public class StringArrayCoder {
     }
 
     public static List<String> decode(byte[] arg) {
+        if (arg == null) {
+            return null;
+        }
         try {
             ByteArrayInputStream bin = new ByteArrayInputStream(arg);
             DataInputStream din = new DataInputStream(bin);

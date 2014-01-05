@@ -3,7 +3,46 @@ package net.cattaka.util.gendbhandler;
 
 public @interface Attribute {
     public enum FieldType {
-        BOOLEAN, BYTE, CHAR, INTEGER, SHORT, LONG, FLOAT, DOUBLE, STRING, BLOB, DATE, ENUM, CUSTOM,
+        /** */
+        P_BYTE,
+        /** */
+        P_SHORT,
+        /** */
+        P_INT,
+        /** */
+        P_LONG,
+        /** */
+        P_FLOAT,
+        /** */
+        P_DOUBLE,
+        /** */
+        P_CHAR,
+        /** */
+        P_BOOLEAN,
+        /** */
+        BYTE,
+        /** */
+        SHORT,
+        /** */
+        INTEGER,
+        /** */
+        LONG,
+        /** */
+        FLOAT,
+        /** */
+        DOUBLE,
+        /** */
+        CHAR,
+        /** */
+        BOOLEAN,
+        /** */
+        STRING,
+        /** */
+        SERIALIZABLE,
+        /** */
+        PARCELABLE,
+        /** */
+        BLOB
     }
 
     boolean persistent() default true;

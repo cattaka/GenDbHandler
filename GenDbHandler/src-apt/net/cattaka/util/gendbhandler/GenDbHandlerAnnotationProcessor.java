@@ -35,6 +35,8 @@ import com.sun.mirror.util.SourcePosition;
 public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     static class EnvironmentBundle {
+        GenDbHandler genDbHandler;
+
         Map<String, FieldEntry> fieldEntryMap;
 
         List<FieldEntry> fieldEntries;
@@ -66,7 +68,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
         String constantsColumnName = null;
 
-        FieldType fieldType = FieldType.STRING;
+        InnerFieldType fieldType = InnerFieldType.STRING;
 
         String fieldClass;
 
@@ -105,6 +107,48 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         List<FieldEntry> columns;
     }
 
+    static class MyTypeVisitor extends SimpleTypeVisitor {
+        private String qualifiedName;
+
+        private boolean primitiveFlag = false;
+
+        private boolean arrayFlag = false;
+
+        private boolean enumFlag = false;
+
+        @Override
+        public void visitDeclaredType(DeclaredType t) {
+            super.visitDeclaredType(t);
+            qualifiedName = t.getDeclaration().getQualifiedName();
+        }
+
+        @Override
+        public void visitEnumType(EnumType t) {
+            super.visitEnumType(t);
+            this.enumFlag = true;
+        }
+
+        @Override
+        public void visitArrayType(ArrayType t) {
+            super.visitArrayType(t);
+            TypeMirror type = t.getComponentType();
+            arrayFlag = true;
+            if (type instanceof PrimitiveType) {
+                primitiveFlag = true;
+                qualifiedName = getPrimitiveTypeClassName((PrimitiveType)type);
+            } else if (type instanceof DeclaredType) {
+                qualifiedName = ((DeclaredType)type).getDeclaration().getQualifiedName();
+            }
+        }
+
+        @Override
+        public void visitPrimitiveType(PrimitiveType t) {
+            super.visitPrimitiveType(t);
+            primitiveFlag = true;
+            qualifiedName = getPrimitiveTypeClassName(t);
+        }
+    }
+
     public GenDbHandlerAnnotationProcessor(AnnotationProcessorEnvironment env) {
         _env = env;
     }
@@ -125,6 +169,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
             EnvironmentBundle bundle = new EnvironmentBundle();
             {
+                bundle.genDbHandler = genDbHandler;
                 bundle.fieldEntries = pickFieldDeclaration(td, messager, genDbHandler);
                 { // fieldEntryMap:name->fieldEntyrの作成
                     Map<String, FieldEntry> feMap = new HashMap<String, FieldEntry>();
@@ -177,6 +222,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 pw.println("import android.content.ContentValues;");
                 pw.println("import android.database.Cursor;");
                 pw.println("import android.database.sqlite.SQLiteDatabase;");
+                pw.println("import net.cattaka.util.gendbhandler.Accessor;");
                 pw.println("import " + packageName + "." + className + ";");
                 pw.println();
                 pw.println("public class " + cprClassName + " {");
@@ -224,14 +270,19 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 pw.println("        ContentValues values = new ContentValues();");
                 for (FieldEntry fe : bundle.fieldEntries) {
                     if (!fe.primaryKey) {
-                        pw.println("        values.put(\"" + fe.columnName + "\", "
-                                + convertGetter("model", fe) + ");");
+                        String getterBlock = String.format(fe.fieldType.getterBlock, "model",
+                                convertCap(fe.name, true));
+                        pw.println("        "
+                                + String.format(fe.fieldType.putToContentValue, "values", "\""
+                                        + fe.columnName + "\"", getterBlock) + ";");
                     }
                 }
                 pw.println("        long key = db.insert(TABLE_NAME, null, values);");
                 for (FieldEntry fe : bundle.fieldEntries) {
-                    if (fe.primaryKey) {
-                        pw.println("        " + convertSetter("model", fe, "key") + ";");
+                    if (fe.primaryKey && fe.fieldType.isInteger) {
+                        pw.println("        "
+                                + String.format(fe.fieldType.setterBlock, "model",
+                                        convertCap(fe.name, true), "key") + ";");
                     }
                 }
                 pw.println("        return key;");
@@ -242,11 +293,15 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 pw.println("        ContentValues values = new ContentValues();");
                 pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
                 pw.println("        String[] whereArgs = new String[]{String.valueOf("
-                        + convertGetter("model", keyFieldEntry) + ")};");
+                        + String.format(keyFieldEntry.fieldType.getterBlock, "model",
+                                convertCap(keyFieldEntry.name, true)) + ")};");
                 for (FieldEntry fe : bundle.fieldEntries) {
                     if (!fe.primaryKey) {
-                        pw.println("        values.put(\"" + fe.columnName + "\", "
-                                + convertGetter("model", fe) + ");");
+                        String getterBlock = String.format(fe.fieldType.getterBlock, "model",
+                                convertCap(fe.name, true));
+                        pw.println("        "
+                                + String.format(fe.fieldType.putToContentValue, "values", "\""
+                                        + fe.columnName + "\"", getterBlock) + ";");
                     }
                 }
                 pw.println("        return db.update(TABLE_NAME, values, whereClause, whereArgs);");
@@ -324,10 +379,11 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 {
                     int index = 0;
                     for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("        dest.set" + convertCap(fe.name, true)
-                                + "(!cursor.isNull(" + index + ") ? "
-                                + createCursorGetter("cursor", fe, String.valueOf(index))
-                                + " : null);");
+                        String readFromCursor = String.format(fe.fieldType.readFromCursor,
+                                "cursor", String.valueOf(index));
+                        pw.println("        "
+                                + String.format(fe.fieldType.setterBlock, "dest",
+                                        convertCap(fe.name, true), readFromCursor) + ";");
                         index++;
                     }
                 }
@@ -347,9 +403,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     for (FieldEntry fe : bundle.fieldEntries) {
                         pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName
                                 + "\");");
-                        pw.println("        dest.set" + convertCap(fe.name, true)
-                                + "(idx>=0 && !cursor.isNull(idx) ? "
-                                + createCursorGetter("cursor", fe, "idx") + " : null);");
+                        String readFromCursor = String.format(fe.fieldType.readFromCursor,
+                                "cursor", "idx");
+                        pw.println("        "
+                                + String.format(fe.fieldType.setterBlock, "dest",
+                                        convertCap(fe.name, true), readFromCursor) + ";");
+
                         // index++;
                     }
                 }
@@ -390,9 +449,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             }
             sb.append(fe.columnName);
             sb.append(" ");
-            sb.append(convertFieldType2DbType(fe));
+            sb.append(fe.fieldType.dbType);
             if (fe.primaryKey) {
-                sb.append(" PRIMARY KEY AUTOINCREMENT");
+                sb.append(" PRIMARY KEY");
+                if (bundle.genDbHandler.autoinclement()) {
+                    sb.append(" AUTOINCREMENT");
+                }
             }
         }
         for (UniqueEntry entries : bundle.uniqueList) {
@@ -422,7 +484,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             sb.append(" ADD COLUMN ");
             sb.append(fe.columnName);
             sb.append(" ");
-            sb.append(convertFieldType2DbType(fe));
+            sb.append(fe.fieldType.dbType);
             result.add(sb.toString());
         }
         return result;
@@ -516,7 +578,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             if (sb.length() > 0) {
                 sb.append(", ");
             }
-            sb.append(convertInnerType(fe.name, fe, true));
+            // FIXME ここがバグってる
+            sb.append(String
+                    .format(fe.fieldType.ge, "values", "\"" + fe.columnName + "\"", fe.name));
         }
         return sb.toString();
     }
@@ -667,106 +731,22 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 }
             }
             {
-                class MyTypeVisitor extends SimpleTypeVisitor {
-                    private String qualifiedName;
-
-                    private boolean primitiveFlag = false;
-
-                    private boolean arrayFlag = false;
-
-                    private boolean enumFlag = false;
-
-                    @Override
-                    public void visitDeclaredType(DeclaredType t) {
-                        super.visitDeclaredType(t);
-                        qualifiedName = t.getDeclaration().getQualifiedName();
-                    }
-
-                    @Override
-                    public void visitEnumType(EnumType t) {
-                        super.visitEnumType(t);
-                        this.enumFlag = true;
-                    }
-
-                    @Override
-                    public void visitArrayType(ArrayType t) {
-                        super.visitArrayType(t);
-                        TypeMirror type = t.getComponentType();
-                        arrayFlag = true;
-                        if (type instanceof PrimitiveType) {
-                            primitiveFlag = true;
-                            qualifiedName = getPrimitiveTypeClassName((PrimitiveType)type);
-                        } else if (type instanceof DeclaredType) {
-                            qualifiedName = ((DeclaredType)type).getDeclaration()
-                                    .getQualifiedName();
-                        }
-                    }
-
-                    @Override
-                    public void visitPrimitiveType(PrimitiveType t) {
-                        super.visitPrimitiveType(t);
-                        primitiveFlag = true;
-                        qualifiedName = getPrimitiveTypeClassName(t);
-                    }
-                }
                 MyTypeVisitor myTypeVisitor = new MyTypeVisitor();
                 TypeMirror typeMirror = fd.getType();
                 typeMirror.accept(myTypeVisitor);
-                if (fe.customParser != null && !Object.class.getName().equals(fe.customParser)) {
-                    fe.fieldType = FieldType.CUSTOM;
-                } else if (myTypeVisitor.arrayFlag) {
-                    if (byte.class.getCanonicalName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.BLOB;
-                    } else {
-                        // not supported
+                fe.fieldClass = myTypeVisitor.qualifiedName;
+                if (fe.persistent) {
+                    findFieldEntry(myTypeVisitor, fe);
+                    if (fe.fieldType == null) {
                         messager.printError(fd.getPosition(),
-                                "Array type is not supported. set persistent=false, or use @customCoder and @customDataType");
-                    }
-                } else if (myTypeVisitor.primitiveFlag) {
-                    // not supported
-                    messager.printError(fd.getPosition(),
-                            "Primitive type is not supported. set persistent=false, or use @customCoder and @customDataType");
-                } else {
-                    if (myTypeVisitor.qualifiedName == null) {
-                        fe.fieldType = FieldType.STRING;
-                        messager.printError(fd.getPosition(), "Unknown data type.");
-                    } else if (Boolean.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.BOOLEAN;
-                    } else if (Byte.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.BYTE;
-                    } else if (Character.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.CHAR;
-                    } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.INTEGER;
-                    } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.SHORT;
-                    } else if (Long.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.LONG;
-                    } else if (Float.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.FLOAT;
-                    } else if (Double.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.DOUBLE;
-                    } else if (String.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.STRING;
-                    } else if (byte[].class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.BLOB;
-                    } else if (Date.class.getName().equals(myTypeVisitor.qualifiedName)) {
-                        fe.fieldType = FieldType.DATE;
-                    } else if (myTypeVisitor.enumFlag) {
-                        fe.fieldType = FieldType.ENUM;
-                    } else {
-                        fe.fieldType = FieldType.STRING;
-                        if (fe.persistent) {
-                            messager.printError(fd.getPosition(),
-                                    "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
-                        }
+                                "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
                     }
                 }
-                fe.fieldClass = myTypeVisitor.qualifiedName;
             }
             {
-                if (fe.primaryKey && fe.fieldType != FieldType.LONG) {
-                    messager.printError(fd.getPosition(), "Only Long is supported for primary key.");
+                if (fe.primaryKey && genDbHandler.autoinclement() && !fe.fieldType.isInteger) {
+                    messager.printError(fd.getPosition(),
+                            "use autoinclement=false, or use number type.");
                 }
             }
             {
@@ -807,174 +787,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         return null;
     }
 
-    private static String convertGetter(String varName, FieldEntry fieldEntry) {
-        String getter = varName + ".get" + convertCap(fieldEntry.name, true) + "()";
-        if (fieldEntry.fieldType == FieldType.CHAR) {
-            getter = "((" + getter + " != null) ? Integer.valueOf(" + getter + ")  : null)";
-        }
-        return convertInnerType(getter, fieldEntry, false);
-    }
-
-    private static String convertSetter(String varName, FieldEntry fieldEntry, String args) {
-        String setter = varName + ".set" + convertCap(fieldEntry.name, true) + "("
-                + convertInnerType(args, fieldEntry, false) + ")";
-        return setter;
-    }
-
-    private static String convertInnerType(String src, FieldEntry fieldEntry, boolean withToString) {
-        switch (fieldEntry.fieldType) {
-            case DATE:
-                if (withToString) {
-                    return "((" + src + " != null) ? String.valueOf(" + src + ".getTime()) : null)";
-                } else {
-                    return "((" + src + " != null) ? " + src + ".getTime() : null)";
-                }
-            case ENUM:
-                return "((" + src + " != null) ? " + src + ".name() : null)";
-            case CUSTOM:
-                if (withToString) {
-                    return "((" + src + " != null) ? toStringValue(" + fieldEntry.customParser
-                            + ".encode(" + src + ")) : null)";
-                } else {
-                    return "((" + src + " != null) ? " + fieldEntry.customParser + ".encode(" + src
-                            + ") : null)";
-                }
-            case BOOLEAN:
-            case BYTE:
-            case CHAR:
-            case INTEGER:
-            case SHORT:
-            case LONG:
-            case FLOAT:
-            case DOUBLE:
-            case STRING:
-            case BLOB:
-            default:
-                if (withToString) {
-                    return "String.valueOf(" + src + ")";
-                } else {
-                    return src;
-                }
-        }
-    }
-
-    private static String convertFieldType2DbType(FieldEntry fieldEntry) {
-        if (fieldEntry.fieldType == FieldType.CUSTOM) {
-            return convertFieldType2DbType(fieldEntry.customDataType);
-        } else {
-            return convertFieldType2DbType(fieldEntry.fieldType);
-        }
-    }
-
-    private static String convertFieldType2DbType(FieldType fieldType) {
-        switch (fieldType) {
-            case BOOLEAN:
-            case BYTE:
-            case CHAR:
-            case INTEGER:
-            case SHORT:
-            case LONG:
-                return "INTEGER";
-            case FLOAT:
-            case DOUBLE:
-                return "REAL";
-            case STRING:
-                return "TEXT";
-            case BLOB:
-                return "BLOB";
-            case DATE:
-                return "LONG";
-            case ENUM:
-                return "TEXT";
-            default:
-                return "TEXT";
-        }
-    }
-
     private static String convertFieldType2Java(FieldEntry fieldEntry) {
-        switch (fieldEntry.fieldType) {
-            case ENUM:
-                return fieldEntry.fieldClass;
-            case CUSTOM:
-                return convertFieldType2Java(fieldEntry.customDataType);
-            default:
-                return convertFieldType2Java(fieldEntry.fieldType);
-        }
-    }
-
-    private static String convertFieldType2Java(FieldType fieldType) {
-        switch (fieldType) {
-            case BOOLEAN:
-                return "Boolean";
-            case BYTE:
-                return "Byte";
-            case CHAR:
-                return "Character";
-            case INTEGER:
-                return "Integer";
-            case SHORT:
-                return "Short";
-            case LONG:
-                return "Long";
-            case FLOAT:
-                return "Float";
-            case DOUBLE:
-                return "Double";
-            case STRING:
-                return "String";
-            case BLOB:
-                return "byte[]";
-            case DATE:
-                return "java.util.Date";
-            case ENUM:
-            case CUSTOM:
-                throw new RuntimeException("Program Error");
-            default:
-                return "String";
-        }
-    }
-
-    private static String createCursorGetter(String varName, FieldEntry fieldEntry, String index) {
-        switch (fieldEntry.fieldType) {
-            case ENUM:
-                return fieldEntry.fieldClass + ".valueOf(" + varName + ".getString(" + index + "))";
-            case CUSTOM:
-                return fieldEntry.customParser + ".decode("
-                        + createCursorGetter(varName, fieldEntry.customDataType, index) + ")";
-            default:
-                return createCursorGetter(varName, fieldEntry.fieldType, index);
-        }
-    }
-
-    private static String createCursorGetter(String varName, FieldType fieldType, String index) {
-        switch (fieldType) {
-            case BOOLEAN:
-                return "(" + varName + ".getInt(" + index + ") != 0)";
-            case BYTE:
-                return "((byte)" + varName + ".getInt(" + index + "))";
-            case CHAR:
-                return "((char)" + varName + ".getInt(" + index + "))";
-            case INTEGER:
-                return varName + ".getInt(" + index + ")";
-            case SHORT:
-                return varName + ".getShort(" + index + ")";
-            case LONG:
-                return varName + ".getLong(" + index + ")";
-            case FLOAT:
-                return varName + ".getFloat(" + index + ")";
-            case DOUBLE:
-                return varName + ".getDouble(" + index + ")";
-            case STRING:
-                return varName + ".getString(" + index + ")";
-            case BLOB:
-                return varName + ".getBlob(" + index + ")";
-            case DATE:
-                return "new java.util.Date(" + varName + ".getLong(" + index + "))";
-            case ENUM:
-            case CUSTOM:
-                throw new RuntimeException("Program Error");
-            default:
-                return "String";
+        if (fieldEntry.fieldType == InnerFieldType.ENUM_NAME
+                || fieldEntry.fieldType == InnerFieldType.ENUM_ORDER) {
+            return fieldEntry.fieldClass;
+        } else {
+            return fieldEntry.fieldClass;
         }
     }
 
@@ -1027,6 +845,122 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             return name.substring(0, 1).toUpperCase() + name.substring(1);
         } else {
             return name.substring(0, 1).toLowerCase() + name.substring(1);
+        }
+    }
+
+    private static void findFieldEntry(MyTypeVisitor myTypeVisitor, FieldEntry fe) {
+        if (fe.customParser != null && !Object.class.getCanonicalName().equals(fe.customParser)) {
+            if (fe.customDataType == FieldType.BLOB) {
+                fe.fieldType = InnerFieldType.BLOB;
+            } else if (fe.customDataType == FieldType.BOOLEAN) {
+                fe.fieldType = InnerFieldType.BOOLEAN;
+            } else if (fe.customDataType == FieldType.BYTE) {
+                fe.fieldType = InnerFieldType.BYTE;
+            } else if (fe.customDataType == FieldType.CHAR) {
+                fe.fieldType = InnerFieldType.BLOB;
+            } else if (fe.customDataType == FieldType.DOUBLE) {
+                fe.fieldType = InnerFieldType.DOUBLE;
+            } else if (fe.customDataType == FieldType.FLOAT) {
+                fe.fieldType = InnerFieldType.FLOAT;
+            } else if (fe.customDataType == FieldType.INTEGER) {
+                fe.fieldType = InnerFieldType.INTEGER;
+            } else if (fe.customDataType == FieldType.LONG) {
+                fe.fieldType = InnerFieldType.LONG;
+            } else if (fe.customDataType == FieldType.P_BOOLEAN) {
+                fe.fieldType = InnerFieldType.P_BOOLEAN;
+            } else if (fe.customDataType == FieldType.P_BYTE) {
+                fe.fieldType = InnerFieldType.P_BYTE;
+            } else if (fe.customDataType == FieldType.P_CHAR) {
+                fe.fieldType = InnerFieldType.P_CHAR;
+            } else if (fe.customDataType == FieldType.P_DOUBLE) {
+                fe.fieldType = InnerFieldType.P_DOUBLE;
+            } else if (fe.customDataType == FieldType.P_FLOAT) {
+                fe.fieldType = InnerFieldType.P_FLOAT;
+            } else if (fe.customDataType == FieldType.P_INT) {
+                fe.fieldType = InnerFieldType.P_INT;
+            } else if (fe.customDataType == FieldType.P_LONG) {
+                fe.fieldType = InnerFieldType.P_LONG;
+            } else if (fe.customDataType == FieldType.P_SHORT) {
+                fe.fieldType = InnerFieldType.P_SHORT;
+            } else if (fe.customDataType == FieldType.PARCELABLE) {
+                fe.fieldType = InnerFieldType.PARCELABLE;
+            } else if (fe.customDataType == FieldType.SERIALIZABLE) {
+                fe.fieldType = InnerFieldType.SERIALIZABLE;
+            } else if (fe.customDataType == FieldType.SHORT) {
+                fe.fieldType = InnerFieldType.SHORT;
+            } else if (fe.customDataType == FieldType.STRING) {
+                fe.fieldType = InnerFieldType.STRING;
+            }
+            fe.fieldType = new InnerFieldType(fe.fieldType.isInteger, //
+                    fe.fieldType.dbType, //
+                    fe.fieldType.readFromParcel, //
+                    fe.fieldType.writeToParcel, //
+                    fe.fieldType.readFromCursor, //
+                    fe.fieldType.putToContentValue, //
+                    fe.customParser + ".encode(%1$s.get%2$s())", //
+                    "%1$s.set%2$s(" + fe.customParser + ".decode(%3$s))" //
+            );
+        } else if (myTypeVisitor.arrayFlag) {
+            if (byte.class.getCanonicalName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.BLOB;
+            }
+        } else if (myTypeVisitor.primitiveFlag) {
+            if (boolean.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_BOOLEAN;
+            } else if (Byte.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_BYTE;
+            } else if (Character.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_CHAR;
+            } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_INT;
+            } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_SHORT;
+            } else if (Long.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_LONG;
+            } else if (Float.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_FLOAT;
+            } else if (Double.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.P_DOUBLE;
+            }
+        } else {
+            if (Boolean.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.BOOLEAN;
+            } else if (Byte.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.BYTE;
+            } else if (Character.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.CHAR;
+            } else if (Integer.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.INTEGER;
+            } else if (Short.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.SHORT;
+            } else if (Long.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.LONG;
+            } else if (Float.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.FLOAT;
+            } else if (Double.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.DOUBLE;
+            } else if (String.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.STRING;
+            } else if (byte[].class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.BLOB;
+            } else if (Date.class.getName().equals(myTypeVisitor.qualifiedName)) {
+                fe.fieldType = InnerFieldType.DATE;
+            } else if (myTypeVisitor.enumFlag) {
+                String t = fe.fieldClass;
+                fe.fieldType = new InnerFieldType(false,
+                        "TEXT", //
+                        "Accessor.readStringFromParcel(%1$s)", //
+                        "Accessor.writeStringToParcel(%1$s, %2$s)", //
+                        "Accessor.readStringFromCursor(%1$s, %2$s)", //
+                        "Accessor.putStringToContentValues(%1$s, %2$s, %3$s)", //
+                        "(%1$s.get%2$s() != null ? %1$s.get%2$s().name() : null)", //
+                        "try { "
+                                + "String s = %3$s;"
+                                + t
+                                + " v = (s!=null) ? "
+                                + t
+                                + ".valueOf(s) : null; %1$s.set%2$s(v); } catch (IllegalArgumentException e) { }");
+            }
         }
     }
 }
