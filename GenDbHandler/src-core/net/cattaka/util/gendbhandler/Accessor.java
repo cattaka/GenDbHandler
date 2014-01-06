@@ -34,6 +34,10 @@ public class Accessor {
         dst.put(key, value);
     }
 
+    public static String toString(byte value) {
+        return String.valueOf(value);
+    }
+
     public static short readPshortFromParcel(Parcel src) {
         return (short)src.readInt();
     }
@@ -48,6 +52,10 @@ public class Accessor {
 
     public static void putPshortToContentValues(ContentValues dst, String key, short value) {
         dst.put(key, value);
+    }
+
+    public static String toString(short value) {
+        return String.valueOf(value);
     }
 
     public static int readPintFromParcel(Parcel src) {
@@ -66,6 +74,10 @@ public class Accessor {
         dst.put(key, value);
     }
 
+    public static String toString(int value) {
+        return String.valueOf(value);
+    }
+
     public static long readPlongFromParcel(Parcel src) {
         return src.readLong();
     }
@@ -80,6 +92,10 @@ public class Accessor {
 
     public static void putPlongToContentValues(ContentValues dst, String key, long value) {
         dst.put(key, value);
+    }
+
+    public static String toString(long value) {
+        return String.valueOf(value);
     }
 
     public static float readPfloatFromParcel(Parcel src) {
@@ -98,6 +114,10 @@ public class Accessor {
         dst.put(key, value);
     }
 
+    public static String toString(float value) {
+        return String.valueOf(value);
+    }
+
     public static double readPdoubleFromParcel(Parcel src) {
         return src.readDouble();
     }
@@ -112,6 +132,10 @@ public class Accessor {
 
     public static void putPdoubleToContentValues(ContentValues dst, String key, double value) {
         dst.put(key, value);
+    }
+
+    public static String toString(double value) {
+        return String.valueOf(value);
     }
 
     public static char readPcharFromParcel(Parcel src) {
@@ -130,6 +154,10 @@ public class Accessor {
         dst.put(key, (short)value);
     }
 
+    public static String toString(char value) {
+        return String.valueOf((short)value);
+    }
+
     public static boolean readPbooleanFromParcel(Parcel src) {
         return src.readByte() != 0;
     }
@@ -144,6 +172,10 @@ public class Accessor {
 
     public static void putPbooleanToContentValues(ContentValues dst, String key, boolean value) {
         dst.put(key, (short)(value ? 1 : 0));
+    }
+
+    public static String toString(boolean value) {
+        return String.valueOf((short)(value ? 1 : 0));
     }
 
     public static Byte readByteFromParcel(Parcel src) {
@@ -165,6 +197,10 @@ public class Accessor {
         dst.put(key, value);
     }
 
+    public static String toString(Byte value) {
+        return (value != null) ? String.valueOf(value) : null;
+    }
+
     public static Short readShortFromParcel(Parcel src) {
         return (src.readByte() != 0) ? (short)src.readInt() : null;
     }
@@ -182,6 +218,10 @@ public class Accessor {
 
     public static void putShortToContentValues(ContentValues dst, String key, Short value) {
         dst.put(key, value);
+    }
+
+    public static String toString(Short value) {
+        return (value != null) ? String.valueOf(value) : null;
     }
 
     public static Integer readIntegerFromParcel(Parcel src) {
@@ -203,6 +243,10 @@ public class Accessor {
         dst.put(key, value);
     }
 
+    public static String toString(Integer value) {
+        return (value != null) ? String.valueOf(value) : null;
+    }
+
     public static Long readLongFromParcel(Parcel src) {
         return (src.readByte() != 0) ? src.readLong() : null;
     }
@@ -220,6 +264,10 @@ public class Accessor {
 
     public static void putLongToContentValues(ContentValues dst, String key, Long value) {
         dst.put(key, value);
+    }
+
+    public static String toString(Long value) {
+        return (value != null) ? String.valueOf(value) : null;
     }
 
     public static Float readFloatFromParcel(Parcel src) {
@@ -241,6 +289,10 @@ public class Accessor {
         dst.put(key, value);
     }
 
+    public static String toString(Float value) {
+        return (value != null) ? String.valueOf(value) : null;
+    }
+
     public static Double readDoubleFromParcel(Parcel src) {
         return (src.readByte() != 0) ? src.readDouble() : null;
     }
@@ -258,6 +310,10 @@ public class Accessor {
 
     public static void putDoubleToContentValues(ContentValues dst, String key, Double value) {
         dst.put(key, value);
+    }
+
+    public static String toString(Double value) {
+        return (value != null) ? String.valueOf(value) : null;
     }
 
     public static Character readCharacterFromParcel(Parcel src) {
@@ -279,6 +335,10 @@ public class Accessor {
         dst.put(key, (value != null) ? (short)value.charValue() : null);
     }
 
+    public static String toString(Character value) {
+        return (value != null) ? String.valueOf((short)value.charValue()) : null;
+    }
+
     public static Boolean readBooleanFromParcel(Parcel src) {
         return (src.readByte() != 0) ? (src.readByte() != 0) : null;
     }
@@ -298,6 +358,10 @@ public class Accessor {
         dst.put(key, (value != null) ? (value ? (byte)1 : 0) : null);
     }
 
+    public static String toString(Boolean value) {
+        return (value != null) ? String.valueOf(value ? 1 : 0) : null;
+    }
+
     public static String readStringFromParcel(Parcel src) {
         return (src.readByte() != 0) ? src.readString() : null;
     }
@@ -315,6 +379,10 @@ public class Accessor {
 
     public static void putStringToContentValues(ContentValues dst, String key, String value) {
         dst.put(key, value);
+    }
+
+    public static String toString(String value) {
+        return (value != null) ? value : null;
     }
 
     public static byte[] readBlobFromParcel(Parcel src) {
@@ -345,11 +413,9 @@ public class Accessor {
         dst.put(key, value);
     }
 
-    public static <T> T readSerializableFromParcel(Parcel src) {
+    public static Serializable readSerializableFromParcel(Parcel src) {
         if (src.readByte() != 0) {
-            @SuppressWarnings("unchecked")
-            T obj = (T)src.readSerializable();
-            return obj;
+            return src.readSerializable();
         } else {
             return null;
         }
@@ -362,7 +428,7 @@ public class Accessor {
         }
     }
 
-    public static <T> T readSerializableFromCursor(Cursor src, int idx) {
+    public static Serializable readSerializableFromCursor(Cursor src, int idx) {
         byte[] bs = readBlobFromCursor(src, idx);
         return fromByteArray(bs);
     }
@@ -385,7 +451,7 @@ public class Accessor {
     }
 
     public static Bundle readBundleFromCursor(Cursor src, int idx) {
-        return readParcelableFromCursor(src, idx, Bundle.class.getClassLoader());
+        return (Bundle)readParcelableFromCursor(src, idx, Bundle.class.getClassLoader());
     }
 
     public static void putBundleToContentValues(ContentValues dst, String key, Bundle value) {
@@ -403,16 +469,13 @@ public class Accessor {
         }
     }
 
-    public static <T extends Parcelable> T readParcelableFromCursor(Cursor src, int idx,
-            ClassLoader loader) {
+    public static Parcelable readParcelableFromCursor(Cursor src, int idx, ClassLoader loader) {
         byte[] bs = readBlobFromCursor(src, idx);
         Parcel parcel = Parcel.obtain();
         try {
             parcel.unmarshall(bs, 0, bs.length);
             parcel.setDataPosition(0);
-            @SuppressWarnings("unchecked")
-            T obj = (T)parcel.readParcelable(loader);
-            return obj;
+            return parcel.readParcelable(loader);
         } finally {
             parcel.recycle();
         }
@@ -447,6 +510,18 @@ public class Accessor {
 
     public static void putDateToContentValues(ContentValues dst, String key, Date value) {
         dst.put(key, (value != null) ? value.getTime() : null);
+    }
+
+    public static String toString(Date value) {
+        return (value != null) ? String.valueOf(value.getTime()) : null;
+    }
+
+    public static String toStringName(Enum<?> value) {
+        return (value != null) ? value.name() : null;
+    }
+
+    public static String toStringOrder(Enum<?> value) {
+        return (value != null) ? String.valueOf(value.ordinal()) : null;
     }
 
     private static byte[] toByteArray(Serializable src) {

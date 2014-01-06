@@ -54,4 +54,6 @@ public @interface Attribute {
     Class<?> customCoder() default Object.class;
 
     FieldType customDataType() default FieldType.STRING;
+
+    String defaultValue() default "";
 }

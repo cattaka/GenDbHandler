@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project default="plugin_export" name="build">
+	<loadproperties srcfile="META-INF/MANIFEST.MF"></loadproperties>
 	<property environment="env"/>
 	<property name="android.home" value="${env.ANDROID_SDK}"/>
 	<target name="plugin_export">
@@ -16,7 +17,7 @@
     	<javac srcdir="src-core;src-common" destdir="build" includeantruntime="no" source="1.5" target="1.5">
     		<classpath path="${android.home}/platforms/android-10/android.jar"></classpath>
     	</javac>
-    	<jar destfile="release/GenDbHandler-core.jar" basedir="build">
+    	<jar destfile="release/plugins/GenDbHandler-core_${Bundle-Version}.jar" basedir="build">
     	</jar>
     </target>
 </project>

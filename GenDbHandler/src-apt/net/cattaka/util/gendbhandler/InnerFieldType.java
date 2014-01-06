@@ -3,198 +3,215 @@ package net.cattaka.util.gendbhandler;
 
 public class InnerFieldType {
     /** */
-    public static final InnerFieldType P_BYTE = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType P_BYTE = new InnerFieldType(true, true, //
+            "INTEGER", //
             "Accessor.readPbyteFromParcel(%1$s)", //
             "Accessor.writePbyteToParcel(%1$s, %2$s)", //
-            "Accessor.readPbyteFromCursor(%1$s, %2$s)", //
-            "Accessor.putPbyteToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPbyteFromCursor(%1$s, %2$s, (byte)%3$s)", //
+            "Accessor.putPbyteToContentValues(%1$s, %2$s, %3$s)", "String.valueOf(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_SHORT = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType P_SHORT = new InnerFieldType(true, true, //
+            "INTEGER", //
             "Accessor.readPshortFromParcel(%1$s)", //
             "Accessor.writePshortToParcel(%1$s, %2$s)", //
-            "Accessor.readPshortFromCursor(%1$s, %2$s)", //
-            "Accessor.putPshortToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPshortFromCursor(%1$s, %2$s, (short)%3$s)", //
+            "Accessor.putPshortToContentValues(%1$s, %2$s, %3$s)", "String.valueOf(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_INT = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType P_INT = new InnerFieldType(true, true, //
+            "INTEGER", //
             "Accessor.readPintFromParcel(%1$s)", //
             "Accessor.writePintToParcel(%1$s, %2$s)", //
-            "Accessor.readPintFromCursor(%1$s, %2$s)", //
-            "Accessor.putPintToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPintFromCursor(%1$s, %2$s, %3$s)", //
+            "Accessor.putPintToContentValues(%1$s, %2$s, %3$s)", "String.valueOf(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_LONG = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType P_LONG = new InnerFieldType(true, true, //
+            "INTEGER", //
             "Accessor.readPlongFromParcel(%1$s)", //
             "Accessor.writePlongToParcel(%1$s, %2$s)", //
-            "Accessor.readPlongFromCursor(%1$s, %2$s)", //
-            "Accessor.putPlongToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPlongFromCursor(%1$s, %2$s, (long)%3$s)", //
+            "Accessor.putPlongToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_FLOAT = new InnerFieldType(false, "REAL", //
+    public static final InnerFieldType P_FLOAT = new InnerFieldType(false, true, //
+            "REAL", //
             "Accessor.readPfloatFromParcel(%1$s)", //
             "Accessor.writePfloatToParcel(%1$s, %2$s)", //
-            "Accessor.readPfloatFromCursor(%1$s, %2$s)", //
-            "Accessor.putPfloatToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPfloatFromCursor(%1$s, %2$s, (float)%3$s)", //
+            "Accessor.putPfloatToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_DOUBLE = new InnerFieldType(false, "REAL",//
+    public static final InnerFieldType P_DOUBLE = new InnerFieldType(false, true,//
+            "REAL", //
             "Accessor.readPdoubleFromParcel(%1$s)", //
             "Accessor.writePdoubleToParcel(%1$s, %2$s)", //
-            "Accessor.readPdoubleFromCursor(%1$s, %2$s)", //
-            "Accessor.putPdoubleToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPdoubleFromCursor(%1$s, %2$s, %3$s)", //
+            "Accessor.putPdoubleToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_CHAR = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType P_CHAR = new InnerFieldType(true, true, //
+            "INTEGER", //
             "Accessor.readPcharFromParcel(%1$s)", //
             "Accessor.writePcharToParcel(%1$s, %2$s)", //
-            "Accessor.readPcharFromCursor(%1$s, %2$s)", //
-            "Accessor.putPcharToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPcharFromCursor(%1$s, %2$s, (char)%3$s)", //
+            "Accessor.putPcharToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType P_BOOLEAN = new InnerFieldType(false, "INTEGER", //
+    public static final InnerFieldType P_BOOLEAN = new InnerFieldType(false, true, //
+            "INTEGER", //
             "Accessor.readPbooleanFromParcel(%1$s)", //
             "Accessor.writePbooleanToParcel(%1$s, %2$s)", //
-            "Accessor.readPbooleanFromCursor(%1$s, %2$s)", //
-            "Accessor.putPbooleanToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readPbooleanFromCursor(%1$s, %2$s, %3$s)", //
+            "Accessor.putPbooleanToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType BYTE = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType BYTE = new InnerFieldType(true, false, //
+            "INTEGER", //
             "Accessor.readByteFromParcel(%1$s)", //
             "Accessor.writeByteToParcel(%1$s, %2$s)", //
             "Accessor.readByteFromCursor(%1$s, %2$s)", //
-            "Accessor.putByteToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putByteToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType SHORT = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType SHORT = new InnerFieldType(true, false, //
+            "INTEGER", //
             "Accessor.readShortFromParcel(%1$s)", //
             "Accessor.writeShortToParcel(%1$s, %2$s)", //
             "Accessor.readShortFromCursor(%1$s, %2$s)", //
-            "Accessor.putShortToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putShortToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType INTEGER = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType INTEGER = new InnerFieldType(true, false, //
+            "INTEGER", //
             "Accessor.readIntegerFromParcel(%1$s)", //
             "Accessor.writeIntegerToParcel(%1$s, %2$s)", //
             "Accessor.readIntegerFromCursor(%1$s, %2$s)", //
-            "Accessor.putIntegerToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putIntegerToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType LONG = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType LONG = new InnerFieldType(true, false, //
+            "INTEGER", //
             "Accessor.readLongFromParcel(%1$s)", //
             "Accessor.writeLongToParcel(%1$s, %2$s)", //
             "Accessor.readLongFromCursor(%1$s, %2$s)", //
-            "Accessor.putLongToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putLongToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType FLOAT = new InnerFieldType(false, "REAL",//
+    public static final InnerFieldType FLOAT = new InnerFieldType(false, false,//
+            "REAL", //
             "Accessor.readFloatFromParcel(%1$s)", //
             "Accessor.writeFloatToParcel(%1$s, %2$s)", //
             "Accessor.readFloatFromCursor(%1$s, %2$s)", //
-            "Accessor.putFloatToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putFloatToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType DOUBLE = new InnerFieldType(false, "REAL",//
+    public static final InnerFieldType DOUBLE = new InnerFieldType(false, false,//
+            "REAL", //
             "Accessor.readDoubleFromParcel(%1$s)", //
             "Accessor.writeDoubleToParcel(%1$s, %2$s)", //
             "Accessor.readDoubleFromCursor(%1$s, %2$s)", //
-            "Accessor.putDoubleToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putDoubleToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType CHAR = new InnerFieldType(true, "INTEGER", //
+    public static final InnerFieldType CHAR = new InnerFieldType(true, false, //
+            "INTEGER", //
             "Accessor.readCharacterFromParcel(%1$s)", //
             "Accessor.writeCharacterToParcel(%1$s, %2$s)", //
             "Accessor.readCharacterFromCursor(%1$s, %2$s)", //
-            "Accessor.putCharacterToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putCharacterToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType BOOLEAN = new InnerFieldType(false, "INTEGER", //
+    public static final InnerFieldType BOOLEAN = new InnerFieldType(false, false, //
+            "INTEGER", //
             "Accessor.readBooleanFromParcel(%1$s)", //
             "Accessor.writeBooleanToParcel(%1$s, %2$s)", //
             "Accessor.readBooleanFromCursor(%1$s, %2$s)", //
-            "Accessor.putBooleanToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putBooleanToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType STRING = new InnerFieldType(false, "TEXT",//
+    public static final InnerFieldType STRING = new InnerFieldType(false, false,//
+            "TEXT", //
             "Accessor.readStringFromParcel(%1$s)", //
             "Accessor.writeStringToParcel(%1$s, %2$s)", //
             "Accessor.readStringFromCursor(%1$s, %2$s)", //
-            "Accessor.putStringToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putStringToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType SERIALIZABLE = new InnerFieldType(false, "BLOB",//
+    public static final InnerFieldType SERIALIZABLE = new InnerFieldType(false, false,//
+            "BLOB", //
             "Accessor.readSerializableFromParcel(%1$s)", //
             "Accessor.writeSerializableToParcel(%1$s, %2$s)", //
             "Accessor.readSerializableFromCursor(%1$s, %2$s)", //
-            "Accessor.putSerializableToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putSerializableToContentValues(%1$s, %2$s, %3$s)", "not Supported" //
     );
 
     /** */
-    public static final InnerFieldType PARCELABLE = new InnerFieldType(false, "BLOB",//
+    public static final InnerFieldType PARCELABLE = new InnerFieldType(false, false,//
+            "BLOB", //
             "Accessor.readParcelableFromParcel(%1$s)", //
             "Accessor.writeParcelableToParcel(%1$s, %2$s)", //
-            "Accessor.readParcelableFromCursor(%1$s, %2$s)", //
-            "Accessor.putParcelableToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.readParcelableFromCursor(%1$s, %2$s, Accessor.class.getClassLoader())", //
+            "Accessor.putParcelableToContentValues(%1$s, %2$s, %3$s)", "not Supported" //
     );
 
     /** */
-    public static final InnerFieldType BLOB = new InnerFieldType(false, "BLOB",//
+    public static final InnerFieldType BLOB = new InnerFieldType(false, false,//
+            "BLOB", //
             "Accessor.readBlobFromParcel(%1$s)", //
             "Accessor.writeBlobToParcel(%1$s, %2$s)", //
             "Accessor.readBlobFromCursor(%1$s, %2$s)", //
-            "Accessor.putBlobToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putBlobToContentValues(%1$s, %2$s, %3$s)", "not Supported" //
     );
 
     /** */
-    public static final InnerFieldType ENUM_NAME = new InnerFieldType(false, "TEXT",//
+    public static final InnerFieldType ENUM_NAME = new InnerFieldType(false, false,//
+            "TEXT", //
             "Accessor.readStringFromParcel(%1$s)", //
             "Accessor.writeStringToParcel(%1$s, %2$s)", //
             "Accessor.readStringFromCursor(%1$s, %2$s)", //
-            "Accessor.putStringToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putStringToContentValues(%1$s, %2$s, %3$s)", "Accessor.toStringName(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType ENUM_ORDER = new InnerFieldType(false, "INTEGER",//
+    public static final InnerFieldType ENUM_ORDER = new InnerFieldType(false, false,//
+            "INTEGER", //
             "Accessor.readpIntegerFromParcel(%1$s)", //
             "Accessor.writeIntegerToParcel(%1$s, %2$s)", //
             "Accessor.readIntegerFromCursor(%1$s, %2$s)", //
-            "Accessor.putIntegerToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putIntegerToContentValues(%1$s, %2$s, %3$s)", "Accessor.toStringOrder(%1$s)" //
     );
 
     /** */
-    public static final InnerFieldType DATE = new InnerFieldType(false, "INTEGER",//
+    public static final InnerFieldType DATE = new InnerFieldType(false, false,//
+            "INTEGER", //
             "Accessor.readDateFromParcel(%1$s)", //
             "Accessor.writeDateToParcel(%1$s, %2$s)", //
             "Accessor.readDateFromCursor(%1$s, %2$s)", //
-            "Accessor.putDateToContentValues(%1$s, %2$s, %3$s)" //
-    );
-
-    /** */
-    public static final InnerFieldType CUSTOM = new InnerFieldType(false, "BLOB",//
-            "Accessor.readFromParcel(%1$s)", //
-            "Accessor.writeToParcel(%1$s, %2$s)", //
-            "Accessor.readFromCursor(%1$s, %2$s)", //
-            "Accessor.putToContentValues(%1$s, %2$s, %3$s)" //
+            "Accessor.putDateToContentValues(%1$s, %2$s, %3$s)", "Accessor.toString(%1$s)" //
     );
 
     public final boolean isInteger;
+
+    public final boolean isPrimitive;
 
     public final String dbType;
 
@@ -210,21 +227,21 @@ public class InnerFieldType {
 
     public final String setterBlock;
 
-    public final String encodeBlock;
+    public final String toStringBlock;
 
-    public final String decodeBlock;
-
-    public InnerFieldType(boolean isNumber, String dbType, String readFromParcel,
-            String writeToParcel, String readFromCursor, String putToContentValue) {
-        this(isNumber, dbType, readFromParcel, writeToParcel, readFromCursor, putToContentValue,
-                "%1$s.get%2$s()", "%1$s.set%2$s(%3$s)");
+    public InnerFieldType(boolean isNumber, boolean isPrimitive, String dbType,
+            String readFromParcel, String writeToParcel, String readFromCursor,
+            String putToContentValue, String toStringBlock) {
+        this(isNumber, isPrimitive, dbType, readFromParcel, writeToParcel, readFromCursor,
+                putToContentValue, toStringBlock, "%1$s.get%2$s()", "%1$s.set%2$s(%3$s)");
     }
 
-    public InnerFieldType(boolean isNumber, String dbType, String readFromParcel,
-            String writeToParcel, String readFromCursor, String putToContentValue,
-            String getterBlock, String setterBlock) {
+    public InnerFieldType(boolean isNumber, boolean isPrimitive, String dbType,
+            String readFromParcel, String writeToParcel, String readFromCursor,
+            String putToContentValue, String toStringBlock, String getterBlock, String setterBlock) {
         super();
         this.isInteger = isNumber;
+        this.isPrimitive = isPrimitive;
         this.dbType = dbType;
         this.readFromParcel = readFromParcel;
         this.writeToParcel = writeToParcel;
@@ -232,6 +249,7 @@ public class InnerFieldType {
         this.putToContentValue = putToContentValue;
         this.getterBlock = getterBlock;
         this.setterBlock = setterBlock;
+        this.toStringBlock = toStringBlock;
     }
 
 }
