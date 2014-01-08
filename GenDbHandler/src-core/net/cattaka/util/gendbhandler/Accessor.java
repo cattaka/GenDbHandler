@@ -385,6 +385,37 @@ public class Accessor {
         return (value != null) ? value : null;
     }
 
+    public static <T extends Enum<T>> T readEnumFromParcel(Parcel src, Class<T> enumType) {
+        String name = (src.readByte() != 0) ? src.readString() : null;
+        try {
+            return (name != null) ? Enum.valueOf(enumType, name) : null;
+        } catch (IllegalArgumentException e) {
+        }
+        return null;
+    }
+
+    public static void writeEnumToParcel(Parcel dst, Enum<?> val) {
+        dst.writeByte(val != null ? (byte)1 : 0);
+        if (val != null) {
+            dst.writeString(val.name());
+        }
+    }
+
+    public static <T extends Enum<T>> T readEnumFromCursor(Cursor src, int idx, Class<T> enumType) {
+        if (!src.isNull(idx)) {
+            String name = src.getString(idx);
+            try {
+                return (name != null) ? Enum.valueOf(enumType, name) : null;
+            } catch (IllegalArgumentException e) {
+            }
+        }
+        return null;
+    }
+
+    public static void putEnumToContentValues(ContentValues dst, String key, Enum<?> value) {
+        dst.put(key, (value != null) ? value.name() : null);
+    }
+
     public static byte[] readBlobFromParcel(Parcel src) {
         int n = src.readInt();
         if (n >= 0) {

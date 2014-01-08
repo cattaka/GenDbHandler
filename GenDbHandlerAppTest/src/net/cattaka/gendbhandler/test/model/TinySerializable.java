@@ -11,12 +11,21 @@ public class TinySerializable implements Serializable {
     public TinySerializable() {
     }
 
-    public int getmData() {
+    
+    
+    public TinySerializable(int mData) {
+		super();
+		this.mData = mData;
+	}
+
+
+
+	public int getData() {
         return mData;
     }
 
-    public void setmData(int mData) {
-        this.mData = mData;
+    public void setData(int data) {
+        this.mData = data;
     }
 
 }

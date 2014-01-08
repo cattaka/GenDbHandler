@@ -84,7 +84,6 @@ public class UserModel {
         this.createdAt = createdAt;
         this.tags = tags;
         this.authority = authority;
-        this.userData = userData;
         this.blob = blob;
         this.booleanData = booleanData;
         this.byteData = byteData;

@@ -14,7 +14,7 @@
         <delete dir="build"/>
     	<mkdir dir="build"/>
     	<echo message="${android.home}/platforms/android-10/android.jar"></echo>
-    	<javac srcdir="src-core;src-common" destdir="build" includeantruntime="no" source="1.5" target="1.5">
+    	<javac srcdir="src-core;src-common" destdir="build" includeantruntime="no" source="1.6" target="1.6">
     		<classpath path="${android.home}/platforms/android-10/android.jar"></classpath>
     	</javac>
     	<jar destfile="release/plugins/GenDbHandler-core_${Bundle-Version}.jar" basedir="build">

@@ -3,8 +3,11 @@ package net.cattaka.gendbhandler.test.model;
 
 import java.util.Date;
 
+import net.cattaka.gendbhandler.test.model.handler.FullModelHandler;
 import net.cattaka.util.gendbhandler.Attribute;
 import net.cattaka.util.gendbhandler.GenDbHandler;
+import android.os.Parcel;
+import android.os.Parcelable;
 
 @GenDbHandler(find = {
         // "blobValue",
@@ -15,13 +18,38 @@ import net.cattaka.util.gendbhandler.GenDbHandler;
         "pLongValue", "pShortValue",
         // "serializable",
         "shortValue", "stringValue", "tinyEnum"
-})
-public class FullDto {
+}, genDbFunc = true, genParcelFunc = true, autoinclement = false)
+public class FullModel implements Parcelable {
+    @Override
+    public int describeContents() {
+        return 0;
+    }
+
+    @Override
+    public void writeToParcel(Parcel dest, int flags) {
+        FullModelHandler.writeToParcel(this, dest, flags);
+    }
+
+    public static final Parcelable.Creator<FullModel> CREATOR = new Parcelable.Creator<FullModel>() {
+        public FullModel createFromParcel(Parcel in) {
+            FullModel model = new FullModel();
+            FullModelHandler.readFromParcel(model, in);
+            return model;
+        }
+
+        public FullModel[] newArray(int size) {
+            return new FullModel[size];
+        }
+    };
+
+    public FullModel() {
+    }
+
     public enum TinyEnum {
         A, B, C
     }
 
-    @Attribute(primaryKey = true, defaultValue = "0")
+    @Attribute(primaryKey = true)
     private long key;
 
     private byte[] blobValue;
@@ -44,28 +72,20 @@ public class FullDto {
 
     private Long longValue;
 
-    @Attribute(defaultValue = "false")
     private boolean pBooleanValue;
 
-    @Attribute(defaultValue = "0")
     private byte pByteValue;
 
-    @Attribute(defaultValue = "0")
     private char pCharValue;
 
-    @Attribute(defaultValue = "0")
     private double pDoubleValue;
 
-    @Attribute(defaultValue = "0")
     private float pFloatValue;
 
-    @Attribute(defaultValue = "0")
     private int pIntValue;
 
-    @Attribute(defaultValue = "0")
     private long pLongValue;
 
-    @Attribute(defaultValue = "0")
     private short pShortValue;
 
     private TinyParcelable parcelableValue;

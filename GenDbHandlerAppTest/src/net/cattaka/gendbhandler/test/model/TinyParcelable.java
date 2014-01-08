@@ -32,12 +32,19 @@ public class TinyParcelable implements Parcelable {
     public TinyParcelable() {
     }
 
-    public int getmData() {
+    
+    
+    public TinyParcelable(int mData) {
+		super();
+		this.mData = mData;
+	}
+
+	public int getData() {
         return mData;
     }
 
-    public void setmData(int mData) {
-        this.mData = mData;
+    public void setData(int data) {
+        this.mData = data;
     }
 
 }

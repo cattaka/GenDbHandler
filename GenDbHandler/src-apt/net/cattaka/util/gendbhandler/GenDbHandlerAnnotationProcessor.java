@@ -11,6 +11,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -74,7 +75,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
         String fieldClass;
 
-        String defaultValue;
+        String nullValue;
 
         String customParser;
 
@@ -176,7 +177,6 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             String className = td.getSimpleName();
             String cprPackageName = packageName + ".handler";
             String cprClassName = className + "Handler";
-            String tableName = convertName(genDbHandler.tableNamingConventions(), className);
 
             EnvironmentBundle bundle = new EnvironmentBundle();
             {
@@ -194,250 +194,454 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 bundle.uniqueList = createUniqueEntries(td.getPosition(), genDbHandler.unique(),
                         bundle, messager);
             }
-            List<FindEntriesPerVersion> findEntriesPerVersions;
-            {
-                Map<Long, FindEntriesPerVersion> findEntriesPerVersionMap = new TreeMap<Long, FindEntriesPerVersion>();
-                for (FieldEntry fe : bundle.fieldEntries) {
-                    FindEntriesPerVersion item = findEntriesPerVersionMap.get(fe.version);
-                    if (item == null) {
-                        item = new FindEntriesPerVersion();
-                        item.version = fe.version;
-                        item.fieldEntries = new ArrayList<FieldEntry>();
-                        findEntriesPerVersionMap.put(fe.version, item);
-                    }
-                    item.fieldEntries.add(fe);
-                }
-                findEntriesPerVersions = new ArrayList<FindEntriesPerVersion>(
-                        findEntriesPerVersionMap.values());
-            }
-            FieldEntry keyFieldEntry = null;
-            { // Check existence of PRIMARY KEY (Only 1 key is supported.)
-                int primaryKeyCount = 0;
-                for (FieldEntry fe : bundle.fieldEntries) {
-                    if (fe.primaryKey) {
-                        primaryKeyCount++;
-                        keyFieldEntry = fe;
-                    }
-                }
-                if (primaryKeyCount == 0) {
-                    messager.printError(td.getPosition(),
-                            "At least one primary key is required. put @Attribute(primaryKey=true) to field of key");
-                } else if (primaryKeyCount > 1) {
-                    messager.printError(td.getPosition(), "Only single primary key is supported.");
-                }
-            }
+
             try {
                 Filer f = getEnvironment().getFiler();
                 PrintWriter pw = f.createSourceFile(cprPackageName + "." + cprClassName);
                 pw.println("package " + cprPackageName + ";");
-                pw.println("import android.content.ContentValues;");
-                pw.println("import android.database.Cursor;");
-                pw.println("import android.database.sqlite.SQLiteDatabase;");
                 pw.println("import net.cattaka.util.gendbhandler.Accessor;");
+                if (genDbHandler.genDbFunc() || genDbHandler.genContentResolverFunc()) {
+                    pw.println("import android.content.ContentValues;");
+                    pw.println("import android.database.Cursor;");
+                }
+                if (genDbHandler.genDbFunc()) {
+                    pw.println("import android.database.sqlite.SQLiteDatabase;");
+                }
+                if (genDbHandler.genContentResolverFunc()) {
+                    pw.println("import android.content.ContentResolver;");
+                    pw.println("import android.net.Uri;");
+                }
+                if (genDbHandler.genParcelFunc()) {
+                    pw.println("import android.os.Parcel;");
+                    pw.println("import android.os.Parcelable;");
+                }
                 pw.println("import " + packageName + "." + className + ";");
                 pw.println();
                 pw.println("public class " + cprClassName + " {");
-                pw.println("    public static final String SQL_CREATE_TABLE = \""
-                        + createCreateStatement(tableName, bundle) + "\";");
-                if (findEntriesPerVersions.size() > 1) {
-                    FindEntriesPerVersion lastItem = findEntriesPerVersions.get(0);
-                    for (int i = 1; i < findEntriesPerVersions.size(); i++) {
-                        FindEntriesPerVersion nextItem = findEntriesPerVersions.get(i);
-                        List<String> sqls = createAlterTableStatements(tableName, nextItem);
-                        pw.println("    public static final String[] SQL_ALTER_TABLE_"
-                                + lastItem.version + "_TO_" + nextItem.version
-                                + " = new String[] {");
-                        for (String sql : sqls) {
-                            pw.println("        \"" + sql + "\",");
-                        }
-                        pw.println("    };");
-                        lastItem = nextItem;
-                    }
-                }
-                pw.println("    public static final String TABLE_NAME = \"" + tableName + "\";");
-                pw.println("    public static final String COLUMNS = \"" + createColumns(bundle)
-                        + "\";");
-                pw.println("    public static final String[] COLUMNS_ARRAY = new String[] {"
-                        + createColumnsArray(bundle) + "};");
 
-                if (genDbHandler.columnIndexConstants()) {
-                    int index = 0;
-                    for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("    public static final int COL_INDEX_"
-                                + fe.constantsColumnName + " = " + index + ";");
-                        index++;
-                    }
+                if (genDbHandler.genDbFunc() || genDbHandler.genContentResolverFunc()) {
+                    writeCursorFunc(messager, pw, bundle, td, genDbHandler, className);
                 }
-                if (genDbHandler.columnNameConstants()) {
-                    for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("    public static final String COL_NAME_"
-                                + fe.constantsColumnName + " = \"" + fe.columnName + "\";");
-                    }
+                if (genDbHandler.genDbFunc()) {
+                    writeDbFunc(messager, pw, bundle, td, genDbHandler, className);
+                }
+                if (genDbHandler.genContentResolverFunc()) {
+                    writeContentResolverFunc(messager, pw, bundle, td, genDbHandler, className);
+                }
+                if (genDbHandler.genParcelFunc()) {
+                    writeParcelFunc(messager, pw, bundle, td, genDbHandler, className);
                 }
 
-                // Insert
-                pw.println("    public static long insert(SQLiteDatabase db, " + className
-                        + " model) {");
-                pw.println("        ContentValues values = new ContentValues();");
-                for (FieldEntry fe : bundle.fieldEntries) {
-                    if (!fe.primaryKey) {
-                        String getterBlock = String.format(fe.fieldType.getterBlock, "model",
-                                convertCap(fe.name, true));
-                        pw.println("        "
-                                + String.format(fe.fieldType.putToContentValue, "values", "\""
-                                        + fe.columnName + "\"", getterBlock) + ";");
-                    }
-                }
-                pw.println("        long key = db.insert(TABLE_NAME, null, values);");
-                for (FieldEntry fe : bundle.fieldEntries) {
-                    if (fe.primaryKey && fe.fieldType.isInteger) {
-                        pw.println("        "
-                                + String.format(fe.fieldType.setterBlock, "model",
-                                        convertCap(fe.name, true), "key") + ";");
-                    }
-                }
-                pw.println("        return key;");
-                pw.println("    }");
-                // Update
-                pw.println("    public static int update(SQLiteDatabase db, " + className
-                        + " model) {");
-                pw.println("        ContentValues values = new ContentValues();");
-                pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
-                pw.println("        String[] whereArgs = new String[]{String.valueOf("
-                        + String.format(keyFieldEntry.fieldType.getterBlock, "model",
-                                convertCap(keyFieldEntry.name, true)) + ")};");
-                for (FieldEntry fe : bundle.fieldEntries) {
-                    if (!fe.primaryKey) {
-                        String getterBlock = String.format(fe.fieldType.getterBlock, "model",
-                                convertCap(fe.name, true));
-                        pw.println("        "
-                                + String.format(fe.fieldType.putToContentValue, "values", "\""
-                                        + fe.columnName + "\"", getterBlock) + ";");
-                    }
-                }
-                pw.println("        return db.update(TABLE_NAME, values, whereClause, whereArgs);");
-                pw.println("    }");
-                // Delete
-                pw.println("    public static int delete(SQLiteDatabase db, "
-                        + convertFieldType2Java(keyFieldEntry) + " key) {");
-                pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
-                pw.println("        String[] whereArgs = new String[]{String.valueOf(key)};");
-                pw.println("        return db.delete(TABLE_NAME, whereClause, whereArgs);");
-                pw.println("    }");
-                // Find
-                for (FindEntry findEntry : bundle.findList) {
-                    if (checkUnique(findEntry, bundle.uniqueList)) {
-                        pw.println("    public static " + className + " "
-                                + createMethodName(findEntry, false) + "(SQLiteDatabase db"
-                                + createMethodArg(findEntry, true) + ") {");
-                        pw.println("        Cursor cursor = " + createMethodName(findEntry, true)
-                                + "(db" + createMethodArg(findEntry, false) + ");");
-                        pw.println("        "
-                                + className
-                                + " model = (cursor.moveToNext()) ? readCursorByIndex(cursor) : null;");
-                        pw.println("        cursor.close();");
-                        pw.println("        return model;");
-                        pw.println("    }");
-                    } else {
-                        pw.println("    public static java.util.List<" + className + "> "
-                                + createMethodName(findEntry, false)
-                                + "(SQLiteDatabase db, int limit"
-                                + createMethodArg(findEntry, true) + ") {");
-                        pw.println("        Cursor cursor = " + createMethodName(findEntry, true)
-                                + "(db, limit" + createMethodArg(findEntry, false) + ");");
-                        pw.println("        java.util.List<" + className
-                                + "> result = new java.util.ArrayList<" + className + ">();");
-                        pw.println("        while (cursor.moveToNext()) {");
-                        pw.println("            result.add(readCursorByIndex(cursor));");
-                        pw.println("        }");
-                        pw.println("        cursor.close();");
-                        pw.println("        return result;");
-                        pw.println("    }");
-                    }
-                }
-                for (FindEntry findEntry : bundle.findList) {
-                    if (checkUnique(findEntry, bundle.uniqueList)) {
-                        pw.println("    public static Cursor " + createMethodName(findEntry, true)
-                                + "(SQLiteDatabase db" + createMethodArg(findEntry, true) + ") {");
-                        pw.println("        String selection = \"" + createSelection(findEntry)
-                                + "\";");
-                        pw.println("        String[] selectionArgs = new String[]{"
-                                + createSelectionArgs(findEntry) + "};");
-                        pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null);");
-                        pw.println("    }");
-                    } else {
-                        String orderBy = createOrderBy(findEntry);
-                        pw.println("    public static Cursor " + createMethodName(findEntry, true)
-                                + "(SQLiteDatabase db, int limit"
-                                + createMethodArg(findEntry, true) + ") {");
-                        pw.println("        String selection = \"" + createSelection(findEntry)
-                                + "\";");
-                        pw.println("        String[] selectionArgs = new String[]{"
-                                + createSelectionArgs(findEntry) + "};");
-                        pw.println("        String limitStr = (limit > 0) ? String.valueOf(limit) : null;");
-                        if (orderBy.length() > 0) {
-                            pw.println("        String orderBy = \"" + createOrderBy(findEntry)
-                                    + "\";");
-                            pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, orderBy, limitStr);");
-                        } else {
-                            pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null, limitStr);");
-                        }
-                        pw.println("    }");
-                    }
-                }
-                pw.println("    public static void readCursorByIndex(Cursor cursor, " + className
-                        + " dest) {");
-                {
-                    int index = 0;
-                    for (FieldEntry fe : bundle.fieldEntries) {
-                        String readFromCursor = String.format(fe.fieldType.readFromCursor,
-                                "cursor", String.valueOf(index), fe.defaultValue);
-                        pw.println("        "
-                                + String.format(fe.fieldType.setterBlock, "dest",
-                                        convertCap(fe.name, true), readFromCursor) + ";");
-                        index++;
-                    }
-                }
-                pw.println("    }");
-                //
-                pw.println("    public static " + className + " readCursorByIndex(Cursor cursor) {");
-                pw.println("        " + className + " result = new " + className + "();");
-                pw.println("        readCursorByIndex(cursor, result);");
-                pw.println("        return result;");
-                pw.println("    }");
-
-                pw.println("    public static void readCursorByName(Cursor cursor, " + className
-                        + " dest) {");
-                pw.println("        int idx;");
-                {
-                    // int index = 0;
-                    for (FieldEntry fe : bundle.fieldEntries) {
-                        pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName
-                                + "\");");
-                        String readFromCursor = String.format(fe.fieldType.readFromCursor,
-                                "cursor", "idx", fe.defaultValue);
-                        pw.println("        "
-                                + String.format(fe.fieldType.setterBlock, "dest",
-                                        convertCap(fe.name, true), readFromCursor) + ";");
-
-                        // index++;
-                    }
-                }
-                pw.println("    }");
-                pw.println("    public static " + className + " readCursorByName(Cursor cursor) {");
-                pw.println("        " + className + " result = new " + className + "();");
-                pw.println("        readCursorByName(cursor, result);");
-                pw.println("        return result;");
-                pw.println("    }");
-                pw.println("    public static String toStringValue(Object arg) {");
-                pw.println("        return (arg != null) ? arg.toString() : null;");
-                pw.println("    }");
                 pw.println("}");
                 pw.close();
             } catch (IOException ioe) {
                 ioe.printStackTrace();
             }
         }
+    }
+
+    public void writeCursorFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
+            TypeDeclaration td, GenDbHandler genDbHandler, String className) throws IOException {
+        String tableName = convertName(genDbHandler.tableNamingConventions(), className);
+
+        List<FindEntriesPerVersion> findEntriesPerVersions;
+        {
+            Map<Long, FindEntriesPerVersion> findEntriesPerVersionMap = new TreeMap<Long, FindEntriesPerVersion>();
+            for (FieldEntry fe : bundle.fieldEntries) {
+                FindEntriesPerVersion item = findEntriesPerVersionMap.get(fe.version);
+                if (item == null) {
+                    item = new FindEntriesPerVersion();
+                    item.version = fe.version;
+                    item.fieldEntries = new ArrayList<FieldEntry>();
+                    findEntriesPerVersionMap.put(fe.version, item);
+                }
+                item.fieldEntries.add(fe);
+            }
+            findEntriesPerVersions = new ArrayList<FindEntriesPerVersion>(
+                    findEntriesPerVersionMap.values());
+        }
+        pw.println("    public static final String SQL_CREATE_TABLE = \""
+                + createCreateStatement(tableName, bundle) + "\";");
+        if (findEntriesPerVersions.size() > 1) {
+            FindEntriesPerVersion lastItem = findEntriesPerVersions.get(0);
+            for (int i = 1; i < findEntriesPerVersions.size(); i++) {
+                FindEntriesPerVersion nextItem = findEntriesPerVersions.get(i);
+                List<String> sqls = createAlterTableStatements(tableName, nextItem);
+                pw.println("    public static final String[] SQL_ALTER_TABLE_" + lastItem.version
+                        + "_TO_" + nextItem.version + " = new String[] {");
+                for (String sql : sqls) {
+                    pw.println("        \"" + sql + "\",");
+                }
+                pw.println("    };");
+                lastItem = nextItem;
+            }
+        }
+        pw.println("    public static final String TABLE_NAME = \"" + tableName + "\";");
+        pw.println("    public static final String COLUMNS = \"" + createColumns(bundle) + "\";");
+        pw.println("    public static final String[] COLUMNS_ARRAY = new String[] {"
+                + createColumnsArray(bundle) + "};");
+
+        if (genDbHandler.columnIndexConstants()) {
+            int index = 0;
+            for (FieldEntry fe : bundle.fieldEntries) {
+                pw.println("    public static final int COL_INDEX_" + fe.constantsColumnName
+                        + " = " + index + ";");
+                index++;
+            }
+        }
+        if (genDbHandler.columnNameConstants()) {
+            for (FieldEntry fe : bundle.fieldEntries) {
+                pw.println("    public static final String COL_NAME_" + fe.constantsColumnName
+                        + " = \"" + fe.columnName + "\";");
+            }
+        }
+        {
+            pw.println("    public static void readCursorByIndex(Cursor cursor, " + className
+                    + " dest) {");
+            {
+                int index = 0;
+                for (FieldEntry fe : bundle.fieldEntries) {
+                    String readFromCursor = String.format(fe.fieldType.readFromCursor, "cursor",
+                            String.valueOf(index), fe.nullValue, fe.fieldClass);
+                    pw.println("        "
+                            + String.format(fe.fieldType.setterBlock, "dest",
+                                    convertCap(fe.name, true), readFromCursor) + ";");
+                    index++;
+                }
+            }
+            pw.println("    }");
+        }
+        {
+            pw.println("    public static " + className + " readCursorByIndex(Cursor cursor) {");
+            pw.println("        " + className + " result = new " + className + "();");
+            pw.println("        readCursorByIndex(cursor, result);");
+            pw.println("        return result;");
+            pw.println("    }");
+        }
+        {
+            pw.println("    public static void readCursorByName(Cursor cursor, " + className
+                    + " dest) {");
+            pw.println("        int idx;");
+            {
+                // int index = 0;
+                for (FieldEntry fe : bundle.fieldEntries) {
+                    pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName + "\");");
+                    String readFromCursor = String.format(fe.fieldType.readFromCursor, "cursor",
+                            "idx", fe.nullValue, fe.fieldClass);
+                    pw.println("        "
+                            + String.format(fe.fieldType.setterBlock, "dest",
+                                    convertCap(fe.name, true), readFromCursor) + ";");
+
+                    // index++;
+                }
+            }
+            pw.println("    }");
+        }
+        {
+            pw.println("    public static " + className + " readCursorByName(Cursor cursor) {");
+            pw.println("        " + className + " result = new " + className + "();");
+            pw.println("        readCursorByName(cursor, result);");
+            pw.println("        return result;");
+            pw.println("    }");
+            pw.println("    public static String toStringValue(Object arg) {");
+            pw.println("        return (arg != null) ? arg.toString() : null;");
+            pw.println("    }");
+        }
+    }
+
+    public void writeDbFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
+            TypeDeclaration td, GenDbHandler genDbHandler, String className) throws IOException {
+        FieldEntry keyFieldEntry = null;
+        { // Check existence of PRIMARY KEY (Only 1 key is supported.)
+            int primaryKeyCount = 0;
+            for (FieldEntry fe : bundle.fieldEntries) {
+                if (fe.primaryKey) {
+                    primaryKeyCount++;
+                    keyFieldEntry = fe;
+                }
+            }
+            if (primaryKeyCount == 0) {
+                messager.printError(td.getPosition(),
+                        "At least one primary key is required. put @Attribute(primaryKey=true) to field of key");
+            } else if (primaryKeyCount > 1) {
+                messager.printError(td.getPosition(), "Only single primary key is supported.");
+            }
+        }
+
+        {// Insert
+            pw.println("    public static long insert(SQLiteDatabase db, " + className
+                    + " model) {");
+            pw.println("        ContentValues values = new ContentValues();");
+            for (FieldEntry fe : bundle.fieldEntries) {
+                if (genDbHandler.autoinclement() && fe.primaryKey) {
+                    continue;
+                }
+                String getterBlock = String.format(fe.fieldType.getterBlock, "model",
+                        convertCap(fe.name, true));
+                pw.println("        "
+                        + String.format(fe.fieldType.putToContentValue, "values", "\""
+                                + fe.columnName + "\"", getterBlock) + ";");
+            }
+            pw.println("        long key = db.insert(TABLE_NAME, null, values);");
+            String cast = (!"long".equals(keyFieldEntry.fieldClass)) ? ("("
+                    + keyFieldEntry.fieldClass + ")") : "";
+            if (genDbHandler.autoinclement()) {
+                pw.println("        "
+                        + String.format(keyFieldEntry.fieldType.setterBlock, "model",
+                                convertCap(keyFieldEntry.name, true), cast + "key") + ";");
+            }
+            pw.println("        return key;");
+            pw.println("    }");
+        }
+        {// Update
+            pw.println("    public static int update(SQLiteDatabase db, " + className + " model) {");
+            pw.println("        ContentValues values = new ContentValues();");
+            pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
+            pw.println("        String[] whereArgs = new String[]{String.valueOf("
+                    + String.format(keyFieldEntry.fieldType.getterBlock, "model",
+                            convertCap(keyFieldEntry.name, true)) + ")};");
+            for (FieldEntry fe : bundle.fieldEntries) {
+                if (!fe.primaryKey) {
+                    String getterBlock = String.format(fe.fieldType.getterBlock, "model",
+                            convertCap(fe.name, true));
+                    pw.println("        "
+                            + String.format(fe.fieldType.putToContentValue, "values", "\""
+                                    + fe.columnName + "\"", getterBlock) + ";");
+                }
+            }
+            pw.println("        return db.update(TABLE_NAME, values, whereClause, whereArgs);");
+            pw.println("    }");
+        }
+        {// Delete
+            pw.println("    public static int delete(SQLiteDatabase db, "
+                    + keyFieldEntry.fieldClass + " key) {");
+            pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
+            pw.println("        String[] whereArgs = new String[]{String.valueOf(key)};");
+            pw.println("        return db.delete(TABLE_NAME, whereClause, whereArgs);");
+            pw.println("    }");
+        }
+        {// Find
+            for (FindEntry findEntry : bundle.findList) {
+                if (checkUnique(findEntry, bundle.uniqueList)) {
+                    pw.println("    public static " + className + " "
+                            + createMethodName(findEntry, false) + "(SQLiteDatabase db"
+                            + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        Cursor cursor = " + createMethodName(findEntry, true)
+                            + "(db" + createMethodArg(findEntry, false) + ");");
+                    pw.println("        " + className
+                            + " model = (cursor.moveToNext()) ? readCursorByIndex(cursor) : null;");
+                    pw.println("        cursor.close();");
+                    pw.println("        return model;");
+                    pw.println("    }");
+                } else {
+                    pw.println("    public static java.util.List<" + className + "> "
+                            + createMethodName(findEntry, false) + "(SQLiteDatabase db, int limit"
+                            + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        Cursor cursor = " + createMethodName(findEntry, true)
+                            + "(db, limit" + createMethodArg(findEntry, false) + ");");
+                    pw.println("        java.util.List<" + className
+                            + "> result = new java.util.ArrayList<" + className + ">();");
+                    pw.println("        while (cursor.moveToNext()) {");
+                    pw.println("            result.add(readCursorByIndex(cursor));");
+                    pw.println("        }");
+                    pw.println("        cursor.close();");
+                    pw.println("        return result;");
+                    pw.println("    }");
+                }
+            }
+            for (FindEntry findEntry : bundle.findList) {
+                if (checkUnique(findEntry, bundle.uniqueList)) {
+                    pw.println("    public static Cursor " + createMethodName(findEntry, true)
+                            + "(SQLiteDatabase db" + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
+                    pw.println("        String[] selectionArgs = new String[]{"
+                            + createSelectionArgs(findEntry) + "};");
+                    pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null);");
+                    pw.println("    }");
+                } else {
+                    String orderBy = createOrderBy(findEntry);
+                    pw.println("    public static Cursor " + createMethodName(findEntry, true)
+                            + "(SQLiteDatabase db, int limit" + createMethodArg(findEntry, true)
+                            + ") {");
+                    pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
+                    pw.println("        String[] selectionArgs = new String[]{"
+                            + createSelectionArgs(findEntry) + "};");
+                    pw.println("        String limitStr = (limit > 0) ? String.valueOf(limit) : null;");
+                    if (orderBy.length() > 0) {
+                        pw.println("        String orderBy = \"" + createOrderBy(findEntry) + "\";");
+                        pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, orderBy, limitStr);");
+                    } else {
+                        pw.println("        return db.query(TABLE_NAME, COLUMNS_ARRAY, selection, selectionArgs, null, null, null, limitStr);");
+                    }
+                    pw.println("    }");
+                }
+            }
+        }
+    }
+
+    public void writeContentResolverFunc(Messager messager, PrintWriter pw,
+            EnvironmentBundle bundle, TypeDeclaration td, GenDbHandler genDbHandler,
+            String className) throws IOException {
+        FieldEntry keyFieldEntry = null;
+        { // Check existence of PRIMARY KEY (Only 1 key is supported.)
+            int primaryKeyCount = 0;
+            for (FieldEntry fe : bundle.fieldEntries) {
+                if (fe.primaryKey) {
+                    primaryKeyCount++;
+                    keyFieldEntry = fe;
+                }
+            }
+            if (primaryKeyCount == 0) {
+                messager.printError(td.getPosition(),
+                        "At least one primary key is required. put @Attribute(primaryKey=true) to field of key");
+            } else if (primaryKeyCount > 1) {
+                messager.printError(td.getPosition(), "Only single primary key is supported.");
+            }
+        }
+
+        {// Insert
+            pw.println("    public static Uri insert(ContentResolver resolver, Uri uri, "
+                    + className + " model) {");
+            pw.println("        ContentValues values = new ContentValues();");
+            for (FieldEntry fe : bundle.fieldEntries) {
+                if (genDbHandler.autoinclement() && fe.primaryKey) {
+                    continue;
+                }
+                String getterBlock = String.format(fe.fieldType.getterBlock, "model",
+                        convertCap(fe.name, true));
+                pw.println("        "
+                        + String.format(fe.fieldType.putToContentValue, "values", "\""
+                                + fe.columnName + "\"", getterBlock) + ";");
+            }
+            pw.println("        return resolver.insert(uri, values);");
+            pw.println("    }");
+        }
+        {// Update
+            pw.println("    public static int update(ContentResolver resolver, Uri uri, "
+                    + className + " model) {");
+            pw.println("        ContentValues values = new ContentValues();");
+            pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
+            pw.println("        String[] whereArgs = new String[]{String.valueOf("
+                    + String.format(keyFieldEntry.fieldType.getterBlock, "model",
+                            convertCap(keyFieldEntry.name, true)) + ")};");
+            for (FieldEntry fe : bundle.fieldEntries) {
+                if (!fe.primaryKey) {
+                    String getterBlock = String.format(fe.fieldType.getterBlock, "model",
+                            convertCap(fe.name, true));
+                    pw.println("        "
+                            + String.format(fe.fieldType.putToContentValue, "values", "\""
+                                    + fe.columnName + "\"", getterBlock) + ";");
+                }
+            }
+            pw.println("        return resolver.update(uri, values, whereClause, whereArgs);");
+            pw.println("    }");
+        }
+        {// Delete
+            pw.println("    public static int delete(ContentResolver resolver, Uri uri, "
+                    + keyFieldEntry.fieldClass + " key) {");
+            pw.println("        String whereClause = \"" + keyFieldEntry.columnName + "=?\";");
+            pw.println("        String[] whereArgs = new String[]{String.valueOf(key)};");
+            pw.println("        return resolver.delete(uri, whereClause, whereArgs);");
+            pw.println("    }");
+        }
+        {// Find
+            for (FindEntry findEntry : bundle.findList) {
+                if (checkUnique(findEntry, bundle.uniqueList)) {
+                    pw.println("    public static " + className + " "
+                            + createMethodName(findEntry, false)
+                            + "(ContentResolver resolver, Uri uri"
+                            + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        Cursor cursor = " + createMethodName(findEntry, true)
+                            + "(resolver, uri" + createMethodArg(findEntry, false) + ");");
+                    pw.println("        " + className
+                            + " model = (cursor.moveToNext()) ? readCursorByIndex(cursor) : null;");
+                    pw.println("        cursor.close();");
+                    pw.println("        return model;");
+                    pw.println("    }");
+                } else {
+                    pw.println("    public static java.util.List<" + className + "> "
+                            + createMethodName(findEntry, false)
+                            + "(ContentResolver resolver, Uri uri"
+                            + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        Cursor cursor = " + createMethodName(findEntry, true)
+                            + "(resolver, uri" + createMethodArg(findEntry, false) + ");");
+                    pw.println("        java.util.List<" + className
+                            + "> result = new java.util.ArrayList<" + className + ">();");
+                    pw.println("        while (cursor.moveToNext()) {");
+                    pw.println("            result.add(readCursorByIndex(cursor));");
+                    pw.println("        }");
+                    pw.println("        cursor.close();");
+                    pw.println("        return result;");
+                    pw.println("    }");
+                }
+            }
+            for (FindEntry findEntry : bundle.findList) {
+                if (checkUnique(findEntry, bundle.uniqueList)) {
+                    pw.println("    public static Cursor " + createMethodName(findEntry, true)
+                            + "(ContentResolver resolver, Uri uri"
+                            + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
+                    pw.println("        String[] selectionArgs = new String[]{"
+                            + createSelectionArgs(findEntry) + "};");
+                    pw.println("        return resolver.query(uri, COLUMNS_ARRAY, selection, selectionArgs, null);");
+                    pw.println("    }");
+                } else {
+                    String orderBy = createOrderBy(findEntry);
+                    pw.println("    public static Cursor " + createMethodName(findEntry, true)
+                            + "(ContentResolver resolver, Uri uri"
+                            + createMethodArg(findEntry, true) + ") {");
+                    pw.println("        String selection = \"" + createSelection(findEntry) + "\";");
+                    pw.println("        String[] selectionArgs = new String[]{"
+                            + createSelectionArgs(findEntry) + "};");
+                    if (orderBy.length() > 0) {
+                        pw.println("        String orderBy = \"" + createOrderBy(findEntry) + "\";");
+                        pw.println("        return resolver.query(uri, COLUMNS_ARRAY, selection, selectionArgs, orderBy);");
+                    } else {
+                        pw.println("        return resolver.query(uri, COLUMNS_ARRAY, selection, selectionArgs, null);");
+                    }
+                    pw.println("    }");
+                }
+            }
+        }
+    }
+
+    public void writeParcelFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
+            TypeDeclaration td, GenDbHandler genDbHandler, String className) {
+        pw.println("    public static final Parcelable.Creator<" + className
+                + "> CREATOR = new Parcelable.Creator<" + className + ">() {");
+        pw.println("        @Override");
+        pw.println("        public " + className + " createFromParcel(Parcel in) {");
+        pw.println("            " + className + " dest = new " + className + "();");
+        pw.println("            readFromParcel(dest, in);");
+        pw.println("            return dest;");
+        pw.println("        }");
+        pw.println("        @Override");
+        pw.println("        public " + className + "[] newArray(int size) {");
+        pw.println("            return new " + className + "[size];");
+        pw.println("        }");
+        pw.println("    };");
+
+        pw.println("    public static void readFromParcel(" + className + " dest, Parcel in) {");
+        for (FieldEntry fe : bundle.fieldEntries) {
+            String readFromParcel = String.format(Locale.ROOT, fe.fieldType.readFromParcel, "in",
+                    fe.fieldClass);
+            pw.print("        ");
+            pw.println("        "
+                    + String.format(fe.fieldType.setterBlock, "dest", convertCap(fe.name, true),
+                            readFromParcel) + ";");
+
+        }
+        pw.println("    }");
+
+        pw.println("    public static void writeToParcel(" + className
+                + " src, Parcel out, int flags) {");
+        for (FieldEntry fe : bundle.fieldEntries) {
+            String getterBlock = String.format(fe.fieldType.getterBlock, "src",
+                    convertCap(fe.name, true));
+            pw.println("        " + String.format(fe.fieldType.writeToParcel, "out", getterBlock)
+                    + ";");
+        }
+        pw.println("    }");
     }
 
     public AnnotationProcessorEnvironment getEnvironment() {
@@ -732,7 +936,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     fe.primaryKey = attribute.primaryKey();
                     fe.customDataType = attribute.customDataType();
                     fe.version = attribute.version();
-                    fe.defaultValue = attribute.defaultValue();
+                    fe.nullValue = attribute.nullValue();
                     try {
                         fe.customParser = attribute.customCoder().getName();
                     } catch (MirroredTypeException mte) {
@@ -759,13 +963,11 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                             "use autoinclement=false, or use number type.");
                 }
                 if (fe.fieldType.isPrimitive
-                        && (fe.defaultValue == null || fe.defaultValue.length() == 0)) {
-                    messager.printError(fd.getPosition(),
-                            "defaultValue is required for primitive type.");
-                } else if (!fe.fieldType.isPrimitive && fe.defaultValue != null
-                        && fe.defaultValue.length() > 0) {
-                    messager.printError(fd.getPosition(),
-                            "defaultValue is only for primitive type.");
+                        && (fe.nullValue == null || fe.nullValue.length() == 0)) {
+                    fe.nullValue = fe.fieldType.defaultNullValue;
+                } else if (!fe.fieldType.isPrimitive && fe.nullValue != null
+                        && fe.nullValue.length() > 0) {
+                    messager.printError(fd.getPosition(), "nullValue is only for primitive type.");
                 }
             }
             {
@@ -780,15 +982,6 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             }
         }
         return fes;
-    }
-
-    private static String convertFieldType2Java(FieldEntry fieldEntry) {
-        if (fieldEntry.fieldType == InnerFieldType.ENUM_NAME
-                || fieldEntry.fieldType == InnerFieldType.ENUM_ORDER) {
-            return fieldEntry.fieldClass;
-        } else {
-            return fieldEntry.fieldClass;
-        }
     }
 
     private static String convertName(NamingConventions namingConventions, String src) {
@@ -889,6 +1082,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             fe.fieldType = new InnerFieldType(fe.fieldType.isInteger, //
                     false, //
                     fe.fieldType.dbType, //
+                    fe.fieldType.defaultNullValue, //
                     fe.fieldType.readFromParcel, //
                     fe.fieldType.writeToParcel, //
                     fe.fieldType.readFromCursor, //
@@ -926,24 +1120,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 fe.fieldType = InnerFieldType.P_DOUBLE;
             }
         } else if (myTypeVisitor.enumType != null) {
-            String t = fe.fieldClass;
-            InnerFieldType origFt = InnerFieldType.ENUM_NAME;
-            fe.fieldType = new InnerFieldType(
-                    origFt.isInteger,
-                    false, //
-                    origFt.dbType, //
-                    origFt.readFromParcel, //
-                    origFt.writeToParcel, //
-                    origFt.readFromCursor, //
-                    origFt.putToContentValue, //
-                    origFt.toStringBlock, //
-                    "(%1$s.get%2$s() != null ? %1$s.get%2$s().name() : null)",
-                    "try { "
-                            + "String s = %3$s;"
-                            + t
-                            + " v = (s!=null) ? "
-                            + t
-                            + ".valueOf(s) : null; %1$s.set%2$s(v); } catch (IllegalArgumentException e) { }");
+            fe.fieldType = InnerFieldType.ENUM_NAME;
         } else if (myTypeVisitor.declaredType != null) {
             String qualifiedName = myTypeVisitor.declaredType.getDeclaration().getQualifiedName();
             if (Boolean.class.getName().equals(qualifiedName)) {
@@ -979,6 +1156,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     if (origFt != null) {
                         fe.fieldType = new InnerFieldType(origFt.isInteger, false, //
                                 origFt.dbType, //
+                                origFt.defaultNullValue, //
                                 "((" + qualifiedName + ")" + origFt.readFromParcel + ")", //
                                 origFt.writeToParcel, //
                                 "((" + qualifiedName + ")" + origFt.readFromCursor + ")", //

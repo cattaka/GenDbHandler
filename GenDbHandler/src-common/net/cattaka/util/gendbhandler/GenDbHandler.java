@@ -22,4 +22,11 @@ public @interface GenDbHandler {
     boolean columnNameConstants() default true;
 
     boolean autoinclement() default true;
+
+    boolean genDbFunc() default true;
+
+    boolean genParcelFunc() default false;
+
+    boolean genContentResolverFunc() default false;
+
 }

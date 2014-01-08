@@ -55,5 +55,5 @@ public @interface Attribute {
 
     FieldType customDataType() default FieldType.STRING;
 
-    String defaultValue() default "";
+    String nullValue() default "";
 }
