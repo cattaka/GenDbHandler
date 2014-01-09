@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,7 +37,9 @@ import com.sun.mirror.util.SimpleTypeVisitor;
 import com.sun.mirror.util.SourcePosition;
 
 public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
-
+	static enum Target {
+		DB,PARCEL,CONTENT_RESOLVER
+	}
     static class EnvironmentBundle {
         GenDbHandler genDbHandler;
 
@@ -61,7 +64,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     }
 
     static class FieldEntry {
-        boolean persistent = true;
+        EnumSet<Target> targets = EnumSet.noneOf(Target.class);
 
         boolean primaryKey = false;
 
@@ -89,7 +92,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
         public OrderByEntry(FieldEntry fe, boolean desc) {
             super();
-            this.persistent = fe.persistent;
+            this.targets = fe.targets;
             this.primaryKey = fe.primaryKey;
             this.name = fe.name;
             this.columnName = fe.columnName;
@@ -182,7 +185,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             {
                 bundle.genDbHandler = genDbHandler;
                 bundle.fieldEntries = pickFieldDeclaration(td, messager, genDbHandler);
-                { // fieldEntryMap:name->fieldEntyrの作成
+                { // fieldEntryMap:name->fieldEntyr縺ｮ菴懈�
                     Map<String, FieldEntry> feMap = new HashMap<String, FieldEntry>();
                     for (FieldEntry fe : bundle.fieldEntries) {
                         feMap.put(fe.name, fe);
@@ -244,10 +247,17 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             TypeDeclaration td, GenDbHandler genDbHandler, String className) throws IOException {
         String tableName = convertName(genDbHandler.tableNamingConventions(), className);
 
+        List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
+        for (FieldEntry fe : bundle.fieldEntries) {
+            if (fe.targets.contains(Target.DB)) {
+            	targetFieldEntries.add(fe);
+            }
+        }
+
         List<FindEntriesPerVersion> findEntriesPerVersions;
         {
             Map<Long, FindEntriesPerVersion> findEntriesPerVersionMap = new TreeMap<Long, FindEntriesPerVersion>();
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 FindEntriesPerVersion item = findEntriesPerVersionMap.get(fe.version);
                 if (item == null) {
                     item = new FindEntriesPerVersion();
@@ -277,20 +287,20 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             }
         }
         pw.println("    public static final String TABLE_NAME = \"" + tableName + "\";");
-        pw.println("    public static final String COLUMNS = \"" + createColumns(bundle) + "\";");
+        pw.println("    public static final String COLUMNS = \"" + createColumns(bundle, Target.DB) + "\";");
         pw.println("    public static final String[] COLUMNS_ARRAY = new String[] {"
-                + createColumnsArray(bundle) + "};");
+                + createColumnsArray(bundle, Target.DB) + "};");
 
         if (genDbHandler.columnIndexConstants()) {
             int index = 0;
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 pw.println("    public static final int COL_INDEX_" + fe.constantsColumnName
                         + " = " + index + ";");
                 index++;
             }
         }
         if (genDbHandler.columnNameConstants()) {
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 pw.println("    public static final String COL_NAME_" + fe.constantsColumnName
                         + " = \"" + fe.columnName + "\";");
             }
@@ -300,7 +310,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     + " dest) {");
             {
                 int index = 0;
-                for (FieldEntry fe : bundle.fieldEntries) {
+                for (FieldEntry fe : targetFieldEntries) {
                     String readFromCursor = String.format(fe.fieldType.readFromCursor, "cursor",
                             String.valueOf(index), fe.nullValue, fe.fieldClass);
                     pw.println("        "
@@ -324,7 +334,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             pw.println("        int idx;");
             {
                 // int index = 0;
-                for (FieldEntry fe : bundle.fieldEntries) {
+                for (FieldEntry fe : targetFieldEntries) {
                     pw.println("        idx = cursor.getColumnIndex(\"" + fe.columnName + "\");");
                     String readFromCursor = String.format(fe.fieldType.readFromCursor, "cursor",
                             "idx", fe.nullValue, fe.fieldClass);
@@ -351,10 +361,17 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     public void writeDbFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
             TypeDeclaration td, GenDbHandler genDbHandler, String className) throws IOException {
-        FieldEntry keyFieldEntry = null;
+        List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
+        for (FieldEntry fe : bundle.fieldEntries) {
+            if (fe.targets.contains(Target.DB)) {
+            	targetFieldEntries.add(fe);
+            }
+        }
+
+    	FieldEntry keyFieldEntry = null;
         { // Check existence of PRIMARY KEY (Only 1 key is supported.)
             int primaryKeyCount = 0;
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 if (fe.primaryKey) {
                     primaryKeyCount++;
                     keyFieldEntry = fe;
@@ -372,7 +389,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             pw.println("    public static long insert(SQLiteDatabase db, " + className
                     + " model) {");
             pw.println("        ContentValues values = new ContentValues();");
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 if (genDbHandler.autoinclement() && fe.primaryKey) {
                     continue;
                 }
@@ -400,7 +417,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             pw.println("        String[] whereArgs = new String[]{String.valueOf("
                     + String.format(keyFieldEntry.fieldType.getterBlock, "model",
                             convertCap(keyFieldEntry.name, true)) + ")};");
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 if (!fe.primaryKey) {
                     String getterBlock = String.format(fe.fieldType.getterBlock, "model",
                             convertCap(fe.name, true));
@@ -482,10 +499,17 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     public void writeContentResolverFunc(Messager messager, PrintWriter pw,
             EnvironmentBundle bundle, TypeDeclaration td, GenDbHandler genDbHandler,
             String className) throws IOException {
-        FieldEntry keyFieldEntry = null;
+        List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
+        for (FieldEntry fe : bundle.fieldEntries) {
+            if (fe.targets.contains(Target.CONTENT_RESOLVER)) {
+            	targetFieldEntries.add(fe);
+            }
+        }
+
+    	FieldEntry keyFieldEntry = null;
         { // Check existence of PRIMARY KEY (Only 1 key is supported.)
             int primaryKeyCount = 0;
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 if (fe.primaryKey) {
                     primaryKeyCount++;
                     keyFieldEntry = fe;
@@ -503,7 +527,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             pw.println("    public static Uri insert(ContentResolver resolver, Uri uri, "
                     + className + " model) {");
             pw.println("        ContentValues values = new ContentValues();");
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 if (genDbHandler.autoinclement() && fe.primaryKey) {
                     continue;
                 }
@@ -524,7 +548,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             pw.println("        String[] whereArgs = new String[]{String.valueOf("
                     + String.format(keyFieldEntry.fieldType.getterBlock, "model",
                             convertCap(keyFieldEntry.name, true)) + ")};");
-            for (FieldEntry fe : bundle.fieldEntries) {
+            for (FieldEntry fe : targetFieldEntries) {
                 if (!fe.primaryKey) {
                     String getterBlock = String.format(fe.fieldType.getterBlock, "model",
                             convertCap(fe.name, true));
@@ -607,6 +631,13 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
     public void writeParcelFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
             TypeDeclaration td, GenDbHandler genDbHandler, String className) {
+        List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
+        for (FieldEntry fe : bundle.fieldEntries) {
+            if (fe.targets.contains(Target.PARCEL)) {
+            	targetFieldEntries.add(fe);
+            }
+        }
+
         pw.println("    public static final Parcelable.Creator<" + className
                 + "> CREATOR = new Parcelable.Creator<" + className + ">() {");
         pw.println("        @Override");
@@ -622,7 +653,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         pw.println("    };");
 
         pw.println("    public static void readFromParcel(" + className + " dest, Parcel in) {");
-        for (FieldEntry fe : bundle.fieldEntries) {
+        for (FieldEntry fe : targetFieldEntries) {
             String readFromParcel = String.format(Locale.ROOT, fe.fieldType.readFromParcel, "in",
                     fe.fieldClass);
             pw.print("        ");
@@ -635,7 +666,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
 
         pw.println("    public static void writeToParcel(" + className
                 + " src, Parcel out, int flags) {");
-        for (FieldEntry fe : bundle.fieldEntries) {
+        for (FieldEntry fe : targetFieldEntries) {
             String getterBlock = String.format(fe.fieldType.getterBlock, "src",
                     convertCap(fe.name, true));
             pw.println("        " + String.format(fe.fieldType.writeToParcel, "out", getterBlock)
@@ -657,6 +688,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         sb.append("(");
         boolean firstFlag = true;
         for (FieldEntry fe : bundle.fieldEntries) {
+        	if (!fe.targets.contains(Target.DB)) {
+        		continue;
+        	}
             if (firstFlag) {
                 firstFlag = false;
             } else {
@@ -753,9 +787,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         return sb.toString();
     }
 
-    private static String createColumns(EnvironmentBundle bundle) {
+    private static String createColumns(EnvironmentBundle bundle, Target target) {
         StringBuilder sb = new StringBuilder();
         for (FieldEntry fe : bundle.fieldEntries) {
+        	if (!fe.targets.contains(target)) {
+        		continue;
+        	}
             if (sb.length() > 0) {
                 sb.append(",");
             }
@@ -764,9 +801,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         return sb.toString();
     }
 
-    private static String createColumnsArray(EnvironmentBundle bundle) {
+    private static String createColumnsArray(EnvironmentBundle bundle, Target target) {
         StringBuilder sb = new StringBuilder();
         for (FieldEntry fe : bundle.fieldEntries) {
+        	if (!fe.targets.contains(target)) {
+        		continue;
+        	}
             if (sb.length() > 0) {
                 sb.append(", ");
             }
@@ -931,8 +971,20 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             }
             {
                 Attribute attribute = fd.getAnnotation(Attribute.class);
+            	if (attribute != null) {
+            		if (attribute.persistent()) {
+	                    if (attribute.forDb()) { fe.targets.add(Target.DB); }
+	                    if (attribute.forParcel()) { fe.targets.add(Target.PARCEL); }
+	                    if (attribute.forContentResolver()) { fe.targets.add(Target.CONTENT_RESOLVER); }
+            		} else {
+            			// none
+            		}
+            	} else {
+                    fe.targets.add(Target.DB);
+                    fe.targets.add(Target.PARCEL);
+                    fe.targets.add(Target.CONTENT_RESOLVER);
+            	}
                 if (attribute != null) {
-                    fe.persistent = attribute.persistent();
                     fe.primaryKey = attribute.primaryKey();
                     fe.customDataType = attribute.customDataType();
                     fe.version = attribute.version();
@@ -942,6 +994,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                     } catch (MirroredTypeException mte) {
                         fe.customParser = mte.getTypeMirror().toString();
                     }
+                    if (!attribute.persistent()
+                    		&& !(attribute.forDb() && attribute.forParcel() && attribute.forContentResolver())
+                    		&& (attribute.forDb() || attribute.forParcel() || attribute.forContentResolver())) {
+                        messager.printError(fd.getPosition(),
+                                "persistent=false will overwrite forDb, forParcel, forContentResolver as false.");
+                    }
                 }
             }
             {
@@ -949,7 +1007,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 TypeMirror typeMirror = fd.getType();
                 typeMirror.accept(myTypeVisitor);
                 fe.fieldClass = myTypeVisitor.getQualifiedName();
-                if (fe.persistent) {
+                if (fe.targets.size() > 0) {
                     findFieldEntry(myTypeVisitor, fe);
                     if (fe.fieldType == null) {
                         messager.printError(fd.getPosition(),
@@ -975,7 +1033,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 fe.columnName = convertName(genDbHandler.fieldNamingConventions(), fe.name);
                 fe.constantsColumnName = convertName(NamingConventions.UPPER_COMPOSITE, fe.name);
             }
-            if (fe.persistent) {
+            if (fe.targets.size() > 0) {
                 fes.add(fe);
             } else {
                 // ignored

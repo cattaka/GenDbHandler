@@ -47,6 +47,10 @@ public @interface Attribute {
 
     boolean persistent() default true;
 
+    boolean forDb() default true;
+    boolean forParcel() default true;
+    boolean forContentResolver() default true;
+
     boolean primaryKey() default false;
 
     long version() default 1;
