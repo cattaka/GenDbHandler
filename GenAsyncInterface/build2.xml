@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project default="plugin_export" name="build">
+	<loadproperties srcfile="META-INF/MANIFEST.MF">
+	</loadproperties>
+	<property environment="env" />
+	<property name="android.home" value="${env.ANDROID_SDK}" />
+	<target name="plugin_export">
+		<delete dir="build" />
+		<mkdir dir="build" />
+		<echo message="${android.home}/platforms/android-10/android.jar">
+		</echo>
+		<javac srcdir="src-apt;src-common" destdir="build" includeantruntime="no" source="1.6" target="1.6">
+			<classpath path="${android.home}/platforms/android-10/android.jar">
+			</classpath>
+		</javac>
+		<copy todir="build/META-INF"><fileset dir="META-INF"/></copy>
+		<jar destfile="release/plugins/GenAsyncInterface-apt_${Bundle-Version}.jar" basedir="build">
+		</jar>
+	</target>
+	<target name="core_export">
+		<delete dir="build" />
+		<mkdir dir="build" />
+		<echo message="${android.home}/platforms/android-10/android.jar">
+		</echo>
+		<javac srcdir="src-core;src-common" destdir="build" includeantruntime="no" source="1.6" target="1.6">
+			<classpath path="${android.home}/platforms/android-10/android.jar">
+			</classpath>
+		</javac>
+		<jar destfile="release/plugins/GenAsyncInterface-core_${Bundle-Version}.jar" basedir="build">
+		</jar>
+	</target>
+</project>

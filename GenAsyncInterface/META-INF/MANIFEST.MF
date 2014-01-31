@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Bundle-ManifestVersion: 2
+Bundle-Name: GenAsyncInterface
+Bundle-SymbolicName: GenAsyncInterface;singleton:=true
+Bundle-Version: 0.0.1
+Require-Bundle: org.eclipse.core.runtime,
+ org.eclipse.jdt.apt.core
+Bundle-RequiredExecutionEnvironment: JavaSE-1.6
+Bundle-Vendor: Cattaka
+Bundle-ActivationPolicy: lazy
