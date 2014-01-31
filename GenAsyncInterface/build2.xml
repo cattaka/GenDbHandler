@@ -9,12 +9,13 @@
 		<mkdir dir="build" />
 		<echo message="${android.home}/platforms/android-10/android.jar">
 		</echo>
-		<javac srcdir="src-apt;src-common" destdir="build" includeantruntime="no" source="1.6" target="1.6">
+		<javac srcdir="src-apt;src-common" destdir="build" includeantruntime="no" source="1.6" target="1.6" debug="on">
 			<classpath path="${android.home}/platforms/android-10/android.jar">
 			</classpath>
 		</javac>
+       <copy todir="build/"><fileset dir="src-res"/></copy>
 		<copy todir="build/META-INF"><fileset dir="META-INF"/></copy>
-		<jar destfile="release/plugins/GenAsyncInterface-apt_${Bundle-Version}.jar" basedir="build">
+		<jar destfile="release/plugins/GenAsyncInterface-apt_${Bundle-Version}.jar" basedir="build" manifest="META-INF/MANIFEST.MF">
 		</jar>
 	</target>
 	<target name="core_export">

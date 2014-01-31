@@ -5,5 +5,6 @@
 	<classpathentry kind="src" path="src-apt"/>
 	<classpathentry kind="src" path="src-core"/>
 	<classpathentry kind="src" path="src-common"/>
+	<classpathentry kind="src" path="src-res"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
