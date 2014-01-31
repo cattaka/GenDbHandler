@@ -47,7 +47,6 @@ public class MyCallbackTest extends InstrumentationTestCase {
             assertSame(Looper.getMainLooper().getThread(), Thread.currentThread());
             return a + b;
         }
-
     }
 
     /**
