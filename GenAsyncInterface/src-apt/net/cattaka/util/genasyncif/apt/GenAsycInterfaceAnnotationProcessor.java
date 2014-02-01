@@ -9,6 +9,8 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -72,6 +74,30 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
             return "ArgType [" + typeName + ", " + innerTypeName + ", " + hiddenTypeName + "]";
         }
 
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((typeName == null) ? 0 : typeName.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            ArgType other = (ArgType)obj;
+            if (typeName == null) {
+                if (other.typeName != null)
+                    return false;
+            } else if (!typeName.equals(other.typeName))
+                return false;
+            return true;
+        }
     }
 
     private static class InterfaceInfo {
@@ -135,6 +161,37 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
         public String toString() {
             return "MethodInfo [methodName=" + methodName + ", argTypes=" + argTypes
                     + ", throwsList=" + throwsList + ", returnType=" + returnType + "]";
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((argTypes == null) ? 0 : argTypes.hashCode());
+            result = prime * result + ((methodName == null) ? 0 : methodName.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            MethodInfo other = (MethodInfo)obj;
+            if (argTypes == null) {
+                if (other.argTypes != null)
+                    return false;
+            } else if (!argTypes.equals(other.argTypes))
+                return false;
+            if (methodName == null) {
+                if (other.methodName != null)
+                    return false;
+            } else if (!methodName.equals(other.methodName))
+                return false;
+            return true;
         }
 
     }
@@ -430,48 +487,77 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
         writer.print(sb.toString());
     }
 
-    public static List<MethodInfo> pullMethodInfos(Element element) {
+    public static List<MethodInfo> pullMethodInfos(TypeElement rootElement) {
         List<MethodInfo> methodInfos = new ArrayList<MethodInfo>();
+        List<TypeElement> interfaces = pullInterfaces(rootElement);
+        Set<MethodInfo> existMethodInfos = new HashSet<MethodInfo>();
         int count = 0;
-        for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
-            AsyncIfAttr attr = method.getAnnotation(AsyncIfAttr.class);
+        for (TypeElement element : interfaces) {
+            for (ExecutableElement method : ElementFilter.methodsIn(element.getEnclosedElements())) {
+                AsyncIfAttr attr = method.getAnnotation(AsyncIfAttr.class);
+                if (attr != null && attr.ignore()) {
+                    continue;
+                }
 
-            String methodName = method.getSimpleName().toString();
-            String eventName = "EVENT_METHOD_" + count + "_" + methodName;
-            String genericsDeclare = "";
-            List<? extends TypeParameterElement> tps = method.getTypeParameters();
-            if (tps.size() > 0) {
-                genericsDeclare = createGenericsDeclare(tps, true) + "";
-            }
+                String methodName = method.getSimpleName().toString();
+                String eventName = "EVENT_METHOD_" + count + "_" + methodName;
+                String genericsDeclare = "";
+                List<? extends TypeParameterElement> tps = method.getTypeParameters();
+                if (tps.size() > 0) {
+                    genericsDeclare = createGenericsDeclare(tps, true) + "";
+                }
 
-            List<ArgType> argTypes = new ArrayList<ArgType>();
-            for (VariableElement arg : method.getParameters()) {
-                argTypes.add(createArgType(arg.asType()));
-            }
-            // for (TypeParameterElement arg : method.getTypeParameters()) {
-            // }
+                List<ArgType> argTypes = new ArrayList<ArgType>();
+                for (VariableElement arg : method.getParameters()) {
+                    argTypes.add(createArgType(arg.asType()));
+                }
+                // for (TypeParameterElement arg : method.getTypeParameters()) {
+                // }
 
-            List<String> throwsList = new ArrayList<String>();
-            for (TypeMirror tm : method.getThrownTypes()) {
-                throwsList.add(pickQualifiedName(tm));
-            }
+                List<String> throwsList = new ArrayList<String>();
+                for (TypeMirror tm : method.getThrownTypes()) {
+                    throwsList.add(pickQualifiedName(tm));
+                }
 
-            ArgType returnType = createArgType(method.getReturnType());
-            boolean needSync = !"void".equalsIgnoreCase(returnType.typeName)
-                    || (throwsList.size() > 0);
+                ArgType returnType = createArgType(method.getReturnType());
+                boolean needSync = !"void".equalsIgnoreCase(returnType.typeName)
+                        || (throwsList.size() > 0);
 
-            if (attr != null) {
-                if (attr.forceSync()) {
-                    needSync = true;
+                if (attr != null) {
+                    if (attr.forceSync()) {
+                        needSync = true;
+                    }
+                }
+
+                MethodInfo methodInfo = new MethodInfo(needSync, methodName, genericsDeclare,
+                        eventName, argTypes, throwsList, returnType);
+                if (existMethodInfos.add(methodInfo)) {
+                    methodInfos.add(methodInfo);
+                    count++;
                 }
             }
-
-            MethodInfo methodInfo = new MethodInfo(needSync, methodName, genericsDeclare,
-                    eventName, argTypes, throwsList, returnType);
-            methodInfos.add(methodInfo);
-            count++;
         }
         return methodInfos;
+    }
+
+    public static List<TypeElement> pullInterfaces(TypeElement root) {
+        List<TypeElement> dts = new ArrayList<TypeElement>();
+        List<TypeElement> tmp = new LinkedList<TypeElement>();
+        tmp.add(root);
+        while (tmp.size() > 0) {
+            TypeElement dt = tmp.remove(0);
+            dts.add(dt);
+            List<? extends TypeMirror> tms = dt.getInterfaces();
+            for (TypeMirror tm : tms) {
+                if (tm instanceof DeclaredType) {
+                    Element ele = ((DeclaredType)tm).asElement();
+                    if (ele instanceof TypeElement) {
+                        tmp.add((TypeElement)ele);
+                    }
+                }
+            }
+        }
+        return dts;
     }
 
     private static ArgType createArgType(TypeParameterElement tpe) {
