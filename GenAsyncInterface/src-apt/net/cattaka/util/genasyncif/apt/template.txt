@@ -7,10 +7,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Handler.Callback;
-import net.cattaka.util.genasyncif.AsyncInterfaceException;
 ${importLines}
 
-public class ${asyncClassName} implements ${interfaceName} {
+public class ${asyncClassName}${fullGenerics} implements ${interfaceName}${shortGenerics} {
     private static final int WORK_SIZE = ${workSize};
     private static final int POOL_SIZE = ${poolSize};
     private static final int EVENT_START = 1;
@@ -18,6 +17,7 @@ public class ${asyncClassName} implements ${interfaceName} {
 ${methodEventLines}
 
     private static Callback sCallback = new Callback() {
+${suppressWarnings}
         @Override
         public boolean handleMessage(Message msg) {
             switch (msg.what) {
@@ -29,9 +29,9 @@ ${caseLines}
     private static Map<Looper, Handler> sHandlerMap = new HashMap<Looper, Handler>();
     private Handler mHandler;
     private Object[][] sOwnedPool = new Object[POOL_SIZE][WORK_SIZE];
-    private ${interfaceName} orig;
+    private ${interfaceName}${shortGenerics} orig;
 
-    public ${asyncClassName}(${interfaceName} orig, Looper looper) {
+    public ${asyncClassName}(${interfaceName}${shortGenerics} orig, Looper looper) {
         super();
         this.orig = orig;
         synchronized (sHandlerMap) {
@@ -43,7 +43,7 @@ ${caseLines}
         }
     }
 
-    public ${asyncClassName}(${interfaceName} orig) {
+    public ${asyncClassName}(${interfaceName}${shortGenerics} orig) {
         this(orig, Looper.getMainLooper());
     }
 

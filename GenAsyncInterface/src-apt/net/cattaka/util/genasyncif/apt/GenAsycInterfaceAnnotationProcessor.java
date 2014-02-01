@@ -11,6 +11,7 @@ import java.io.Reader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
@@ -23,11 +24,13 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.PrimitiveType;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
@@ -43,15 +46,30 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
 
         String innerTypeName;
 
+        String hiddenTypeName;
+
+        boolean isGenerics;
+
         private ArgType(String typeName, String innerTypeName) {
             super();
             this.typeName = typeName;
             this.innerTypeName = innerTypeName;
+            this.hiddenTypeName = innerTypeName;
+            isGenerics = false;
+        }
+
+        private ArgType(String typeName, String innerTypeName, String hiddenTypeName,
+                boolean isGenerics) {
+            super();
+            this.typeName = typeName;
+            this.innerTypeName = innerTypeName;
+            this.hiddenTypeName = hiddenTypeName;
+            this.isGenerics = isGenerics;
         }
 
         @Override
         public String toString() {
-            return "ArgType [typeName=" + typeName + ", innerTypeName=" + innerTypeName + "]";
+            return "ArgType [" + typeName + ", " + innerTypeName + ", " + hiddenTypeName + "]";
         }
 
     }
@@ -63,11 +81,18 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
 
         String asyncClassName;
 
-        public InterfaceInfo(String packageName, String className, String asyncClassName) {
+        String fullGenerics;
+
+        String shortGenerics;
+
+        public InterfaceInfo(String packageName, String interfaceName, String asyncClassName,
+                String fullGenerics, String shortGenerics) {
             super();
             this.packageName = packageName;
-            this.interfaceName = className;
+            this.interfaceName = interfaceName;
             this.asyncClassName = asyncClassName;
+            this.fullGenerics = fullGenerics;
+            this.shortGenerics = shortGenerics;
         }
 
         @Override
@@ -83,6 +108,8 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
 
         String methodName;
 
+        String genericsDeclare;
+
         String eventName;
 
         List<ArgType> argTypes;
@@ -91,11 +118,13 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
 
         ArgType returnType;
 
-        public MethodInfo(boolean needSync, String methodName, String eventName,
-                List<ArgType> argTypes, List<String> throwsList, ArgType returnType) {
+        public MethodInfo(boolean needSync, String methodName, String genericsDeclare,
+                String eventName, List<ArgType> argTypes, List<String> throwsList,
+                ArgType returnType) {
             super();
             this.needSync = needSync;
             this.methodName = methodName;
+            this.genericsDeclare = genericsDeclare;
             this.eventName = eventName;
             this.argTypes = argTypes;
             this.throwsList = throwsList;
@@ -128,6 +157,7 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
             mTemplate = sb.toString();
         } catch (IOException e) {
             processingEnv.getMessager().printMessage(Kind.ERROR, e.getMessage());
+            throw new RuntimeException(e);
         } finally {
             try {
                 in.close();
@@ -154,10 +184,20 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
     private void processElement(TypeElement srcElement) throws IOException {
         GenAsyncInterface gai = srcElement.getAnnotation(GenAsyncInterface.class);
         String packageName = getPackageName(srcElement);
-        String className = String.valueOf(srcElement.getSimpleName());
+        List<? extends TypeParameterElement> typeParameters = srcElement.getTypeParameters();
+        String fullGenerics = "";
+        String shortGenerics = "";
+        if (typeParameters.size() > 0) {
+            fullGenerics = createGenericsDeclare(typeParameters, true);
+            shortGenerics = createGenericsDeclare(typeParameters, false);
+
+        }
+        String interfaceName = String.valueOf(srcElement.getSimpleName());
         String asyncClassName = gai.prefix() + srcElement.getSimpleName() + gai.suffix();
         String qualifiedName = packageName + ".async." + asyncClassName;
-        InterfaceInfo interfaceInfo = new InterfaceInfo(packageName, className, asyncClassName);
+
+        InterfaceInfo interfaceInfo = new InterfaceInfo(packageName, interfaceName, asyncClassName,
+                fullGenerics, shortGenerics);
 
         Filer filer = processingEnv.getFiler();
         JavaFileObject fileObject = filer.createSourceFile(qualifiedName, srcElement);
@@ -178,6 +218,55 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
         String asyncClassName = info.asyncClassName;
         String interfaceName = info.interfaceName;
         String methodEventLines = "";
+        String suppressWarnings = "";
+
+        boolean useAsyncInterfaceException = false;
+        {
+            for (MethodInfo mi : methodInfos) {
+                if (mi.needSync) {
+                    useAsyncInterfaceException = true;
+                    break;
+                }
+            }
+            if (useAsyncInterfaceException) {
+                importLines += "\nimport net.cattaka.util.genasyncif.AsyncInterfaceException;";
+            }
+        }
+        {
+            Set<String> items = new TreeSet<String>();
+            if (info.fullGenerics.length() > 0) {
+                items.add("rawtypes");
+            }
+            outer: for (MethodInfo mi : methodInfos) {
+                if (mi.genericsDeclare.length() > 0) {
+                    items.add("unchecked");
+                    break outer;
+                }
+                for (ArgType at : mi.argTypes) {
+                    if (at.isGenerics) {
+                        items.add("unchecked");
+                        break outer;
+                    }
+                }
+            }
+            if (items.size() > 0) {
+                StringBuilder sb = new StringBuilder();
+                int c = 0;
+                sb.append("        @SuppressWarnings({");
+                for (String item : items) {
+                    if (c > 0) {
+                        sb.append(',');
+                    }
+                    sb.append('"');
+                    sb.append(item);
+                    sb.append('"');
+                    c++;
+                }
+                sb.append("})");
+                suppressWarnings = sb.toString();
+            }
+        }
+
         for (int i = 0; i < methodInfos.size(); i++) {
             MethodInfo mi = methodInfos.get(i);
             methodEventLines += "    private static final int " + mi.eventName
@@ -191,7 +280,8 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                 MethodInfo mi = methodInfos.get(i);
                 workSize = Math.max(workSize, mi.argTypes.size() + 4);
                 sb.append("    @Override\n");
-                sb.append("    public " + mi.returnType.typeName + " " + mi.methodName + "(");
+                sb.append("    public " + mi.genericsDeclare + mi.returnType.typeName + " "
+                        + mi.methodName + "(");
                 for (int j = 0; j < mi.argTypes.size(); j++) {
                     ArgType arg = mi.argTypes.get(j);
                     if (j > 0) {
@@ -250,6 +340,9 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                     }
                     sb.append("        }\n");
                     if (!"void".equalsIgnoreCase(mi.returnType.typeName)) {
+                        if (mi.returnType.isGenerics) {
+                            sb.append("        @SuppressWarnings(\"unchecked\")\n");
+                        }
                         sb.append("        " + mi.returnType.typeName + " result = ("
                                 + mi.returnType.innerTypeName + ") work[WORK_SIZE - 2];\n");
                     }
@@ -275,8 +368,8 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                 sb.append("                ${interfaceName} orig = (${interfaceName}) work[1];\n");
                 for (int j = 0; j < mi.argTypes.size(); j++) {
                     ArgType arg = mi.argTypes.get(j);
-                    sb.append("                " + arg.innerTypeName + " arg" + j + " = ("
-                            + arg.innerTypeName + ") (work[" + (j + 2) + "]);\n");
+                    sb.append("                " + arg.hiddenTypeName + " arg" + j + " = ("
+                            + arg.hiddenTypeName + ") (work[" + (j + 2) + "]);\n");
                 }
 
                 if (!mi.needSync) {
@@ -294,7 +387,7 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                     sb.append("                try {\n");
                     sb.append("                    ");
                     if (!"void".equalsIgnoreCase(mi.returnType.typeName)) {
-                        sb.append("work[WORK_SIZE - 2] = ");
+                        sb.append("Object result = ");
                     }
                     sb.append("orig." + mi.methodName + "(");
                     for (int j = 0; j < mi.argTypes.size(); j++) {
@@ -304,6 +397,9 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                         sb.append("arg" + j);
                     }
                     sb.append(");\n");
+                    if (!"void".equalsIgnoreCase(mi.returnType.typeName)) {
+                        sb.append("                    work[WORK_SIZE - 2] = result;\n");
+                    }
                     sb.append("                } catch (Exception e) {\n");
                     sb.append("                    work[WORK_SIZE - 1] = e;\n");
                     sb.append("                }\n");
@@ -325,7 +421,10 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
         replaceStringBuilder(sb, "${packageName}", packageName);
         replaceStringBuilder(sb, "${asyncClassName}", asyncClassName);
         replaceStringBuilder(sb, "${interfaceName}", interfaceName);
+        replaceStringBuilder(sb, "${fullGenerics}", info.fullGenerics);
+        replaceStringBuilder(sb, "${shortGenerics}", info.shortGenerics);
         replaceStringBuilder(sb, "${poolSize}", String.valueOf(gai.poolSize()));
+        replaceStringBuilder(sb, "${suppressWarnings}", suppressWarnings);
         replaceStringBuilder(sb, "${workSize}", String.valueOf(workSize));
 
         writer.print(sb.toString());
@@ -339,6 +438,11 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
 
             String methodName = method.getSimpleName().toString();
             String eventName = "EVENT_METHOD_" + count + "_" + methodName;
+            String genericsDeclare = "";
+            List<? extends TypeParameterElement> tps = method.getTypeParameters();
+            if (tps.size() > 0) {
+                genericsDeclare = createGenericsDeclare(tps, true) + "";
+            }
 
             List<ArgType> argTypes = new ArrayList<ArgType>();
             for (VariableElement arg : method.getParameters()) {
@@ -362,12 +466,28 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                 }
             }
 
-            MethodInfo methodInfo = new MethodInfo(needSync, methodName, eventName, argTypes,
-                    throwsList, returnType);
+            MethodInfo methodInfo = new MethodInfo(needSync, methodName, genericsDeclare,
+                    eventName, argTypes, throwsList, returnType);
             methodInfos.add(methodInfo);
             count++;
         }
         return methodInfos;
+    }
+
+    private static ArgType createArgType(TypeParameterElement tpe) {
+        List<? extends TypeMirror> tms = tpe.getBounds();
+        ArgType at = null;
+        for (TypeMirror tm : tms) {
+            at = createArgType(tm);
+            break;
+        }
+
+        String name = String.valueOf(tpe);
+        if (at != null && !Object.class.getName().equals(at.typeName)) {
+            return new ArgType(name, name + " extends " + at.typeName, "Object", true);
+        } else {
+            return new ArgType(name, name, "Object", true);
+        }
     }
 
     private static ArgType createArgType(TypeMirror tm) {
@@ -390,11 +510,73 @@ public class GenAsycInterfaceAnnotationProcessor extends AbstractProcessor {
                 return new ArgType("double", "Double");
             case VOID:
                 return new ArgType("void", "Void");
+            case TYPEVAR:
+                String t = String.valueOf(((TypeVariable)tm).asElement());
+                // String l =
+                // String.valueOf(((TypeVariable)tm).getLowerBound());
+                String u = String.valueOf(((TypeVariable)tm).getUpperBound());
+                return new ArgType(t, t, u, true);
+            case DECLARED: {
+                String hiddenName = pickQualifiedName(tm);
+                String name = String.valueOf(tm);
+                DeclaredType dt = (DeclaredType)tm;
+                List<? extends TypeMirror> tms = dt.getTypeArguments();
+                if (tms.size() > 0) {
+                    hiddenName += createHiddenGenericsDeclare(tms.size());
+                    return new ArgType(name, name, hiddenName, true);
+                } else {
+                    return new ArgType(name, name, hiddenName, false);
+                }
+            }
             default: {
                 String name = pickQualifiedName(tm);
                 return new ArgType(name, name);
             }
         }
+    }
+
+    private static String createGenericsDeclare(List<? extends TypeMirror> tms) {
+        StringBuilder sb = new StringBuilder();
+        List<ArgType> ats = new ArrayList<ArgType>();
+        for (TypeMirror tm : tms) {
+            if (sb.length() > 0) {
+                sb.append(",");
+            }
+            sb.append(createArgType(tm).typeName);
+        }
+        return sb.toString();
+    }
+
+    private static String createGenericsDeclare(
+            List<? extends TypeParameterElement> typeParameters, boolean full) {
+        StringBuilder sb = new StringBuilder();
+        {
+            for (TypeParameterElement tpe : typeParameters) {
+                ArgType at = createArgType(tpe);
+                if (sb.length() > 0) {
+                    sb.append(',');
+                }
+                if (full) {
+                    sb.append(at.innerTypeName);
+                } else {
+                    sb.append(at.typeName);
+                }
+            }
+        }
+        return '<' + sb.toString() + '>';
+    }
+
+    private static String createHiddenGenericsDeclare(int n) {
+        StringBuilder sb = new StringBuilder();
+        sb.append('<');
+        for (int i = 0; i < n; i++) {
+            if (i > 0) {
+                sb.append(',');
+            }
+            sb.append('?');
+        }
+        sb.append('>');
+        return sb.toString();
     }
 
     private static String pickQualifiedName(TypeMirror src) {
