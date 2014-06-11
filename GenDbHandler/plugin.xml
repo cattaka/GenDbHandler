@@ -1,12 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <?eclipse version="3.0"?>
 <plugin>
-   <extension
-         point="org.eclipse.jdt.apt.core.annotationProcessorFactory">
-      <factories enableDefault="true">
-	      <factory
-	         class="net.cattaka.util.gendbhandler.GenDbHandlerAnnotationProcessorFactory">
-	      </factory>
-      </factories>  
+   <extension point="org.eclipse.jdt.apt.core.annotationProcessorFactory">
+      <java6processors enableDefault="true">
+            <java6processor class="net.cattaka.util.gendbhandler.apt.GenDbHandlerAnnotationProcessor"/>
+      </java6processors>
    </extension>
 </plugin>

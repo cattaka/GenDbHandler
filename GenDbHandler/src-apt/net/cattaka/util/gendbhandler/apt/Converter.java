@@ -1,5 +1,5 @@
 
-package net.cattaka.util.gendbhandler;
+package net.cattaka.util.gendbhandler.apt;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

@@ -1,5 +1,5 @@
 
-package net.cattaka.util.gendbhandler;
+package net.cattaka.util.gendbhandler.apt;
 
 public class InnerFieldType {
     /** */

@@ -1,45 +1,56 @@
 
-package net.cattaka.util.gendbhandler;
+package net.cattaka.util.gendbhandler.apt;
+
+import static javax.lang.model.util.ElementFilter.typesIn;
 
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.Date;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
+import javax.annotation.processing.AbstractProcessor;
+import javax.annotation.processing.Filer;
+import javax.annotation.processing.Messager;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.annotation.processing.RoundEnvironment;
+import javax.annotation.processing.SupportedAnnotationTypes;
+import javax.annotation.processing.SupportedSourceVersion;
+import javax.lang.model.SourceVersion;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.PrimitiveType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.SimpleTypeVisitor6;
+import javax.tools.Diagnostic.Kind;
+import javax.tools.JavaFileObject;
+
+import net.cattaka.util.gendbhandler.Attribute;
 import net.cattaka.util.gendbhandler.Attribute.FieldType;
+import net.cattaka.util.gendbhandler.GenDbHandler;
 import net.cattaka.util.gendbhandler.GenDbHandler.NamingConventions;
 
-import com.sun.mirror.apt.AnnotationProcessor;
-import com.sun.mirror.apt.AnnotationProcessorEnvironment;
-import com.sun.mirror.apt.Filer;
-import com.sun.mirror.apt.Messager;
-import com.sun.mirror.declaration.FieldDeclaration;
-import com.sun.mirror.declaration.Modifier;
-import com.sun.mirror.declaration.TypeDeclaration;
-import com.sun.mirror.type.ArrayType;
-import com.sun.mirror.type.DeclaredType;
-import com.sun.mirror.type.EnumType;
-import com.sun.mirror.type.MirroredTypeException;
-import com.sun.mirror.type.PrimitiveType;
-import com.sun.mirror.type.PrimitiveType.Kind;
-import com.sun.mirror.type.TypeMirror;
-import com.sun.mirror.util.SimpleTypeVisitor;
-import com.sun.mirror.util.SourcePosition;
+@SupportedSourceVersion(SourceVersion.RELEASE_6)
+@SupportedAnnotationTypes("net.cattaka.util.gendbhandler.*")
+public class GenDbHandlerAnnotationProcessor extends AbstractProcessor {
+    static enum Target {
+        DB, PARCEL, CONTENT_RESOLVER
+    }
 
-public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
-	static enum Target {
-		DB,PARCEL,CONTENT_RESOLVER
-	}
     static class EnvironmentBundle {
         GenDbHandler genDbHandler;
 
@@ -115,37 +126,38 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         List<FieldEntry> columns;
     }
 
-    static class MyTypeVisitor extends SimpleTypeVisitor {
+    static class MyTypeVisitor extends SimpleTypeVisitor6<Void, Void> {
         private DeclaredType declaredType;
 
-        private EnumType enumType;
+        private DeclaredType enumType;
 
         private ArrayType arrayType;
 
         private PrimitiveType primitiveType;
 
         @Override
-        public void visitDeclaredType(DeclaredType t) {
-            super.visitDeclaredType(t);
+        public Void visitDeclared(DeclaredType t, Void p) {
+            TypeElement element = (TypeElement)t.asElement();
+
+            TypeMirror tm = element.getSuperclass();
+            if (Enum.class.getName().equals(pickQualifiedName(tm))) {
+                enumType = t;
+                return super.visitDeclared(t, p);
+            }
             declaredType = t;
+            return super.visitDeclared(t, p);
         }
 
         @Override
-        public void visitEnumType(EnumType t) {
-            super.visitEnumType(t);
-            enumType = t;
-        }
-
-        @Override
-        public void visitArrayType(ArrayType t) {
-            super.visitArrayType(t);
+        public Void visitArray(ArrayType t, Void p) {
             arrayType = t;
+            return super.visitArray(t, p);
         }
 
         @Override
-        public void visitPrimitiveType(PrimitiveType t) {
-            super.visitPrimitiveType(t);
+        public Void visitPrimitive(PrimitiveType t, Void p) {
             primitiveType = t;
+            return super.visitPrimitive(t, p);
         }
 
         public String getQualifiedName() {
@@ -161,96 +173,102 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 return null;
             }
         }
-
     }
 
-    public GenDbHandlerAnnotationProcessor(AnnotationProcessorEnvironment env) {
-        _env = env;
+    @Override
+    public synchronized void init(ProcessingEnvironment processingEnv) {
+        super.init(processingEnv);
     }
 
-    public void process() {
-        Messager messager = _env.getMessager();
-        Collection<TypeDeclaration> tds = this.getEnvironment().getTypeDeclarations();
-        for (TypeDeclaration td : tds) {
-            GenDbHandler genDbHandler = td.getAnnotation(GenDbHandler.class);
-            if (genDbHandler == null) {
-                continue;
+    @Override
+    public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
+        for (TypeElement element : typesIn(roundEnv.getElementsAnnotatedWith(GenDbHandler.class))) {
+            processElement(element);
+        }
+        return true;
+    }
+
+    public void processElement(TypeElement srcElement) {
+        Messager messager = processingEnv.getMessager();
+        GenDbHandler genDbHandler = srcElement.getAnnotation(GenDbHandler.class);
+
+        String className = srcElement.getSimpleName().toString();
+        String qualifiedName = srcElement.getQualifiedName().toString();
+        String packageName = qualifiedName.substring(0, qualifiedName.length() - className.length()
+                - 1);
+        String cprPackageName = packageName + ".handler";
+        String cprClassName = className + "Handler";
+
+        EnvironmentBundle bundle = new EnvironmentBundle();
+        {
+            bundle.genDbHandler = genDbHandler;
+            bundle.fieldEntries = pickFieldDeclaration(srcElement, messager, genDbHandler);
+            { // fieldEntryMap:name->fieldEntyr縺ｮ菴懈�
+                Map<String, FieldEntry> feMap = new HashMap<String, FieldEntry>();
+                for (FieldEntry fe : bundle.fieldEntries) {
+                    feMap.put(fe.name, fe);
+                }
+                bundle.fieldEntryMap = feMap;
             }
-            String packageName = td.getPackage().getQualifiedName();
-            String className = td.getSimpleName();
-            String cprPackageName = packageName + ".handler";
-            String cprClassName = className + "Handler";
+            bundle.findList = createFindEntries(srcElement, genDbHandler.find(), bundle, messager);
+            bundle.uniqueList = createUniqueEntries(srcElement, genDbHandler.unique(), bundle,
+                    messager);
+        }
 
-            EnvironmentBundle bundle = new EnvironmentBundle();
-            {
-                bundle.genDbHandler = genDbHandler;
-                bundle.fieldEntries = pickFieldDeclaration(td, messager, genDbHandler);
-                { // fieldEntryMap:name->fieldEntyr縺ｮ菴懈�
-                    Map<String, FieldEntry> feMap = new HashMap<String, FieldEntry>();
-                    for (FieldEntry fe : bundle.fieldEntries) {
-                        feMap.put(fe.name, fe);
-                    }
-                    bundle.fieldEntryMap = feMap;
-                }
-                bundle.findList = createFindEntries(td.getPosition(), genDbHandler.find(), bundle,
-                        messager);
-                bundle.uniqueList = createUniqueEntries(td.getPosition(), genDbHandler.unique(),
-                        bundle, messager);
+        try {
+            Filer filer = processingEnv.getFiler();
+            JavaFileObject fileObject = filer.createSourceFile(cprPackageName + "." + cprClassName,
+                    srcElement);
+            PrintWriter pw = new PrintWriter(fileObject.openWriter());
+            pw.println("package " + cprPackageName + ";");
+            pw.println("import net.cattaka.util.gendbhandler.Accessor;");
+            if (genDbHandler.genDbFunc() || genDbHandler.genContentResolverFunc()) {
+                pw.println("import android.content.ContentValues;");
+                pw.println("import android.database.Cursor;");
+            }
+            if (genDbHandler.genDbFunc()) {
+                pw.println("import android.database.sqlite.SQLiteDatabase;");
+            }
+            if (genDbHandler.genContentResolverFunc()) {
+                pw.println("import android.content.ContentResolver;");
+                pw.println("import android.net.Uri;");
+            }
+            if (genDbHandler.genParcelFunc()) {
+                pw.println("import android.os.Parcel;");
+                pw.println("import android.os.Parcelable;");
+            }
+            pw.println("import " + packageName + "." + className + ";");
+            pw.println();
+            pw.println("public class " + cprClassName + " {");
+
+            if (genDbHandler.genDbFunc() || genDbHandler.genContentResolverFunc()) {
+                writeCursorFunc(messager, pw, bundle, srcElement, genDbHandler, className);
+            }
+            if (genDbHandler.genDbFunc()) {
+                writeDbFunc(messager, pw, bundle, srcElement, genDbHandler, className);
+            }
+            if (genDbHandler.genContentResolverFunc()) {
+                writeContentResolverFunc(messager, pw, bundle, srcElement, genDbHandler, className);
+            }
+            if (genDbHandler.genParcelFunc()) {
+                writeParcelFunc(messager, pw, bundle, srcElement, genDbHandler, className);
             }
 
-            try {
-                Filer f = getEnvironment().getFiler();
-                PrintWriter pw = f.createSourceFile(cprPackageName + "." + cprClassName);
-                pw.println("package " + cprPackageName + ";");
-                pw.println("import net.cattaka.util.gendbhandler.Accessor;");
-                if (genDbHandler.genDbFunc() || genDbHandler.genContentResolverFunc()) {
-                    pw.println("import android.content.ContentValues;");
-                    pw.println("import android.database.Cursor;");
-                }
-                if (genDbHandler.genDbFunc()) {
-                    pw.println("import android.database.sqlite.SQLiteDatabase;");
-                }
-                if (genDbHandler.genContentResolverFunc()) {
-                    pw.println("import android.content.ContentResolver;");
-                    pw.println("import android.net.Uri;");
-                }
-                if (genDbHandler.genParcelFunc()) {
-                    pw.println("import android.os.Parcel;");
-                    pw.println("import android.os.Parcelable;");
-                }
-                pw.println("import " + packageName + "." + className + ";");
-                pw.println();
-                pw.println("public class " + cprClassName + " {");
-
-                if (genDbHandler.genDbFunc() || genDbHandler.genContentResolverFunc()) {
-                    writeCursorFunc(messager, pw, bundle, td, genDbHandler, className);
-                }
-                if (genDbHandler.genDbFunc()) {
-                    writeDbFunc(messager, pw, bundle, td, genDbHandler, className);
-                }
-                if (genDbHandler.genContentResolverFunc()) {
-                    writeContentResolverFunc(messager, pw, bundle, td, genDbHandler, className);
-                }
-                if (genDbHandler.genParcelFunc()) {
-                    writeParcelFunc(messager, pw, bundle, td, genDbHandler, className);
-                }
-
-                pw.println("}");
-                pw.close();
-            } catch (IOException ioe) {
-                ioe.printStackTrace();
-            }
+            pw.println("}");
+            pw.close();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
         }
     }
 
     public void writeCursorFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
-            TypeDeclaration td, GenDbHandler genDbHandler, String className) throws IOException {
+            TypeElement td, GenDbHandler genDbHandler, String className) throws IOException {
         String tableName = convertName(genDbHandler.tableNamingConventions(), className);
 
         List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
         for (FieldEntry fe : bundle.fieldEntries) {
             if (fe.targets.contains(Target.DB)) {
-            	targetFieldEntries.add(fe);
+                targetFieldEntries.add(fe);
             }
         }
 
@@ -287,7 +305,8 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             }
         }
         pw.println("    public static final String TABLE_NAME = \"" + tableName + "\";");
-        pw.println("    public static final String COLUMNS = \"" + createColumns(bundle, Target.DB) + "\";");
+        pw.println("    public static final String COLUMNS = \"" + createColumns(bundle, Target.DB)
+                + "\";");
         pw.println("    public static final String[] COLUMNS_ARRAY = new String[] {"
                 + createColumnsArray(bundle, Target.DB) + "};");
 
@@ -360,15 +379,15 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     }
 
     public void writeDbFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
-            TypeDeclaration td, GenDbHandler genDbHandler, String className) throws IOException {
+            TypeElement td, GenDbHandler genDbHandler, String className) throws IOException {
         List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
         for (FieldEntry fe : bundle.fieldEntries) {
             if (fe.targets.contains(Target.DB)) {
-            	targetFieldEntries.add(fe);
+                targetFieldEntries.add(fe);
             }
         }
 
-    	FieldEntry keyFieldEntry = null;
+        FieldEntry keyFieldEntry = null;
         { // Check existence of PRIMARY KEY (Only 1 key is supported.)
             int primaryKeyCount = 0;
             for (FieldEntry fe : targetFieldEntries) {
@@ -378,10 +397,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 }
             }
             if (primaryKeyCount == 0) {
-                messager.printError(td.getPosition(),
-                        "At least one primary key is required. put @Attribute(primaryKey=true) to field of key");
+                messager.printMessage(
+                        Kind.ERROR,
+                        "At least one primary key is required. put @Attribute(primaryKey=true) to field of key",
+                        td);
             } else if (primaryKeyCount > 1) {
-                messager.printError(td.getPosition(), "Only single primary key is supported.");
+                messager.printMessage(Kind.ERROR, "Only single primary key is supported.", td);
             }
         }
 
@@ -497,16 +518,16 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     }
 
     public void writeContentResolverFunc(Messager messager, PrintWriter pw,
-            EnvironmentBundle bundle, TypeDeclaration td, GenDbHandler genDbHandler,
-            String className) throws IOException {
+            EnvironmentBundle bundle, TypeElement td, GenDbHandler genDbHandler, String className)
+            throws IOException {
         List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
         for (FieldEntry fe : bundle.fieldEntries) {
             if (fe.targets.contains(Target.CONTENT_RESOLVER)) {
-            	targetFieldEntries.add(fe);
+                targetFieldEntries.add(fe);
             }
         }
 
-    	FieldEntry keyFieldEntry = null;
+        FieldEntry keyFieldEntry = null;
         { // Check existence of PRIMARY KEY (Only 1 key is supported.)
             int primaryKeyCount = 0;
             for (FieldEntry fe : targetFieldEntries) {
@@ -516,10 +537,12 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 }
             }
             if (primaryKeyCount == 0) {
-                messager.printError(td.getPosition(),
-                        "At least one primary key is required. put @Attribute(primaryKey=true) to field of key");
+                messager.printMessage(
+                        Kind.ERROR,
+                        "At least one primary key is required. put @Attribute(primaryKey=true) to field of key",
+                        td);
             } else if (primaryKeyCount > 1) {
-                messager.printError(td.getPosition(), "Only single primary key is supported.");
+                messager.printMessage(Kind.ERROR, "Only single primary key is supported.", td);
             }
         }
 
@@ -630,11 +653,11 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     }
 
     public void writeParcelFunc(Messager messager, PrintWriter pw, EnvironmentBundle bundle,
-            TypeDeclaration td, GenDbHandler genDbHandler, String className) {
+            TypeElement td, GenDbHandler genDbHandler, String className) {
         List<FieldEntry> targetFieldEntries = new ArrayList<GenDbHandlerAnnotationProcessor.FieldEntry>();
         for (FieldEntry fe : bundle.fieldEntries) {
             if (fe.targets.contains(Target.PARCEL)) {
-            	targetFieldEntries.add(fe);
+                targetFieldEntries.add(fe);
             }
         }
 
@@ -675,12 +698,6 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         pw.println("    }");
     }
 
-    public AnnotationProcessorEnvironment getEnvironment() {
-        return _env;
-    }
-
-    AnnotationProcessorEnvironment _env;
-
     public String createCreateStatement(String tableName, EnvironmentBundle bundle) {
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE TABLE ");
@@ -688,9 +705,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         sb.append("(");
         boolean firstFlag = true;
         for (FieldEntry fe : bundle.fieldEntries) {
-        	if (!fe.targets.contains(Target.DB)) {
-        		continue;
-        	}
+            if (!fe.targets.contains(Target.DB)) {
+                continue;
+            }
             if (firstFlag) {
                 firstFlag = false;
             } else {
@@ -790,9 +807,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     private static String createColumns(EnvironmentBundle bundle, Target target) {
         StringBuilder sb = new StringBuilder();
         for (FieldEntry fe : bundle.fieldEntries) {
-        	if (!fe.targets.contains(target)) {
-        		continue;
-        	}
+            if (!fe.targets.contains(target)) {
+                continue;
+            }
             if (sb.length() > 0) {
                 sb.append(",");
             }
@@ -804,9 +821,9 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     private static String createColumnsArray(EnvironmentBundle bundle, Target target) {
         StringBuilder sb = new StringBuilder();
         for (FieldEntry fe : bundle.fieldEntries) {
-        	if (!fe.targets.contains(target)) {
-        		continue;
-        	}
+            if (!fe.targets.contains(target)) {
+                continue;
+            }
             if (sb.length() > 0) {
                 sb.append(", ");
             }
@@ -885,32 +902,32 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         return sb.toString();
     }
 
-    private static List<UniqueEntry> createUniqueEntries(SourcePosition sp, String[] srcs,
+    private static List<UniqueEntry> createUniqueEntries(Element element, String[] srcs,
             EnvironmentBundle bundle, Messager messager) {
         List<UniqueEntry> uniqueEntries = new ArrayList<UniqueEntry>();
         for (String src : srcs) {
             UniqueEntry entry = new UniqueEntry();
-            entry.columns = createFieldList(sp, src, bundle, messager);
+            entry.columns = createFieldList(element, src, bundle, messager);
             uniqueEntries.add(entry);
         }
         return uniqueEntries;
     }
 
-    private static List<FindEntry> createFindEntries(SourcePosition sp, String[] srcs,
+    private static List<FindEntry> createFindEntries(Element element, String[] srcs,
             EnvironmentBundle bundle, Messager messager) {
         List<FindEntry> findEntries = new ArrayList<FindEntry>();
         for (String src : srcs) {
             String[] src2 = src.split(":");
             FindEntry entry = new FindEntry();
-            entry.columns = createFieldList(sp, src2[0], bundle, messager);
-            entry.orderBy = (src2.length > 1) ? createOrderByList(sp, src2[1], bundle, messager)
-                    : new ArrayList<OrderByEntry>();
+            entry.columns = createFieldList(element, src2[0], bundle, messager);
+            entry.orderBy = (src2.length > 1) ? createOrderByList(element, src2[1], bundle,
+                    messager) : new ArrayList<OrderByEntry>();
             findEntries.add(entry);
         }
         return findEntries;
     }
 
-    private static List<FieldEntry> createFieldList(SourcePosition sp, String src,
+    private static List<FieldEntry> createFieldList(Element element, String src,
             EnvironmentBundle bundle, Messager messager) {
         List<FieldEntry> fieldEntries = new ArrayList<FieldEntry>();
         if (src != null && src.length() > 0) {
@@ -921,14 +938,15 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
                 if (fe != null) {
                     fieldEntries.add(fe);
                 } else {
-                    messager.printError(sp, "Field '" + name + "' in fields is not found.");
+                    messager.printMessage(Kind.ERROR, "Field '" + name
+                            + "' in fields is not found.", element);
                 }
             }
         }
         return fieldEntries;
     }
 
-    private static List<OrderByEntry> createOrderByList(SourcePosition sp, String src,
+    private static List<OrderByEntry> createOrderByList(Element element, String src,
             EnvironmentBundle bundle, Messager messager) {
         String[] names = src.split(",");
         List<OrderByEntry> orderByEntries = new ArrayList<OrderByEntry>();
@@ -946,90 +964,106 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             if (fe != null) {
                 orderByEntries.add(new OrderByEntry(fe, desc));
             } else {
-                messager.printError(sp, "Field '" + name + "' in fields is not found.");
+                messager.printMessage(Kind.ERROR, "Field '" + name + "' in fields is not found.",
+                        element);
             }
         }
         return orderByEntries;
     }
 
-    private static List<FieldEntry> pickFieldDeclaration(TypeDeclaration td, Messager messager,
+    private static List<FieldEntry> pickFieldDeclaration(TypeElement td, Messager messager,
             GenDbHandler genDbHandler) {
         List<FieldEntry> fes = new ArrayList<FieldEntry>();
-        List<FieldDeclaration> fds = new ArrayList<FieldDeclaration>(td.getFields());
-        Collections.sort(fds, new Comparator<FieldDeclaration>() {
-            @Override
-            public int compare(FieldDeclaration o1, FieldDeclaration o2) {
-                int r = o1.getPosition().line() - o2.getPosition().line();
-                return (r != 0) ? r : (o1.getPosition().column() - o2.getPosition().column());
-            }
-        });
+        List<Element> fds = new ArrayList<Element>(ElementFilter.fieldsIn(td.getEnclosedElements()));
+        // Collections.sort(fds, new Comparator<Element>() {
+        // @Override
+        // public int compare(Element o1, Element o2) {
+        //
+        // int r = o1.getPosition().line() - o2.getPosition().line();
+        // return (r != 0) ? r : (o1.getPosition().column() -
+        // o2.getPosition().column());
+        // }
+        // });
 
-        for (FieldDeclaration fd : fds) {
+        for (Element fd : fds) {
             FieldEntry fe = new FieldEntry();
             if (fd.getModifiers().contains(Modifier.STATIC)) {
                 continue;
             }
             {
                 Attribute attribute = fd.getAnnotation(Attribute.class);
-            	if (attribute != null) {
-            		if (attribute.persistent()) {
-	                    if (attribute.forDb()) { fe.targets.add(Target.DB); }
-	                    if (attribute.forParcel()) { fe.targets.add(Target.PARCEL); }
-	                    if (attribute.forContentResolver()) { fe.targets.add(Target.CONTENT_RESOLVER); }
-            		} else {
-            			// none
-            		}
-            	} else {
+                if (attribute != null) {
+                    if (attribute.persistent()) {
+                        if (attribute.forDb()) {
+                            fe.targets.add(Target.DB);
+                        }
+                        if (attribute.forParcel()) {
+                            fe.targets.add(Target.PARCEL);
+                        }
+                        if (attribute.forContentResolver()) {
+                            fe.targets.add(Target.CONTENT_RESOLVER);
+                        }
+                    } else {
+                        // none
+                    }
+                } else {
                     fe.targets.add(Target.DB);
                     fe.targets.add(Target.PARCEL);
                     fe.targets.add(Target.CONTENT_RESOLVER);
-            	}
+                }
                 if (attribute != null) {
                     fe.primaryKey = attribute.primaryKey();
                     fe.customDataType = attribute.customDataType();
                     fe.version = attribute.version();
                     fe.nullValue = attribute.nullValue();
                     try {
-                        fe.customParser = attribute.customCoder().getName();
-                    } catch (MirroredTypeException mte) {
-                        fe.customParser = mte.getTypeMirror().toString();
+                        fe.customParser = attribute.customCoder().toString();
+                    } catch (MirroredTypeException expected) {
+                        TypeMirror type = expected.getTypeMirror();
+                        fe.customParser = type.toString();
                     }
                     if (!attribute.persistent()
-                    		&& !(attribute.forDb() && attribute.forParcel() && attribute.forContentResolver())
-                    		&& (attribute.forDb() || attribute.forParcel() || attribute.forContentResolver())) {
-                        messager.printError(fd.getPosition(),
-                                "persistent=false will overwrite forDb, forParcel, forContentResolver as false.");
+                            && !(attribute.forDb() && attribute.forParcel() && attribute
+                                    .forContentResolver())
+                            && (attribute.forDb() || attribute.forParcel() || attribute
+                                    .forContentResolver())) {
+                        messager.printMessage(
+                                Kind.ERROR,
+                                "persistent=false will overwrite forDb, forParcel, forContentResolver as false.",
+                                fd);
                     }
                 }
             }
             {
                 MyTypeVisitor myTypeVisitor = new MyTypeVisitor();
-                TypeMirror typeMirror = fd.getType();
-                typeMirror.accept(myTypeVisitor);
+                TypeMirror typeMirror = fd.asType();
+                typeMirror.accept(myTypeVisitor, null);
                 fe.fieldClass = myTypeVisitor.getQualifiedName();
                 if (fe.targets.size() > 0) {
                     findFieldEntry(myTypeVisitor, fe);
                     if (fe.fieldType == null) {
-                        messager.printError(fd.getPosition(),
-                                "Data type is not supported. set persistent=false, or use @customCoder and @customDataType");
+                        messager.printMessage(
+                                Kind.ERROR,
+                                "Data type is not supported. set persistent=false, or use @customCoder and @customDataType",
+                                fd);
                     }
                 }
             }
             {
                 if (fe.primaryKey && genDbHandler.autoinclement() && !fe.fieldType.isInteger) {
-                    messager.printError(fd.getPosition(),
-                            "use autoinclement=false, or use number type.");
+                    messager.printMessage(Kind.ERROR,
+                            "use autoinclement=false, or use number type.", fd);
                 }
                 if (fe.fieldType.isPrimitive
                         && (fe.nullValue == null || fe.nullValue.length() == 0)) {
                     fe.nullValue = fe.fieldType.defaultNullValue;
                 } else if (!fe.fieldType.isPrimitive && fe.nullValue != null
                         && fe.nullValue.length() > 0) {
-                    messager.printError(fd.getPosition(), "nullValue is only for primitive type.");
+                    messager.printMessage(Kind.ERROR, "nullValue is only for primitive type.", fd);
                 }
             }
             {
-                fe.name = fd.getSimpleName();
+                fe.name = fd.getSimpleName().toString();
                 fe.columnName = convertName(genDbHandler.fieldNamingConventions(), fe.name);
                 fe.constantsColumnName = convertName(NamingConventions.UPPER_COMPOSITE, fe.name);
             }
@@ -1152,7 +1186,7 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
         } else if (myTypeVisitor.arrayType != null) {
             if (myTypeVisitor.arrayType.getComponentType() instanceof PrimitiveType) {
                 PrimitiveType pt = (PrimitiveType)myTypeVisitor.arrayType.getComponentType();
-                if (pt.getKind() == Kind.BYTE) {
+                if (pt.getKind() == TypeKind.BYTE) {
                     fe.fieldType = InnerFieldType.BLOB;
                 } else {
                     // TODO
@@ -1160,27 +1194,27 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             }
         } else if (myTypeVisitor.primitiveType != null) {
 
-            if (myTypeVisitor.primitiveType.getKind() == Kind.BOOLEAN) {
+            if (myTypeVisitor.primitiveType.getKind() == TypeKind.BOOLEAN) {
                 fe.fieldType = InnerFieldType.P_BOOLEAN;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.BYTE) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.BYTE) {
                 fe.fieldType = InnerFieldType.P_BYTE;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.CHAR) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.CHAR) {
                 fe.fieldType = InnerFieldType.P_CHAR;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.INT) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.INT) {
                 fe.fieldType = InnerFieldType.P_INT;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.SHORT) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.SHORT) {
                 fe.fieldType = InnerFieldType.P_SHORT;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.LONG) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.LONG) {
                 fe.fieldType = InnerFieldType.P_LONG;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.FLOAT) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.FLOAT) {
                 fe.fieldType = InnerFieldType.P_FLOAT;
-            } else if (myTypeVisitor.primitiveType.getKind() == Kind.DOUBLE) {
+            } else if (myTypeVisitor.primitiveType.getKind() == TypeKind.DOUBLE) {
                 fe.fieldType = InnerFieldType.P_DOUBLE;
             }
         } else if (myTypeVisitor.enumType != null) {
             fe.fieldType = InnerFieldType.ENUM_NAME;
         } else if (myTypeVisitor.declaredType != null) {
-            String qualifiedName = myTypeVisitor.declaredType.getDeclaration().getQualifiedName();
+            String qualifiedName = pickQualifiedName(myTypeVisitor.declaredType);
             if (Boolean.class.getName().equals(qualifiedName)) {
                 fe.fieldType = InnerFieldType.BOOLEAN;
             } else if (Byte.class.getName().equals(qualifiedName)) {
@@ -1204,7 +1238,8 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
             } else if (Date.class.getName().equals(qualifiedName)) {
                 fe.fieldType = InnerFieldType.DATE;
             } else {
-                for (TypeMirror tm : myTypeVisitor.declaredType.getSuperinterfaces()) {
+                TypeElement element = (TypeElement)myTypeVisitor.declaredType.asElement();
+                for (TypeMirror tm : element.getInterfaces()) {
                     InnerFieldType origFt = null;
                     if (Serializable.class.getCanonicalName().equals(pickQualifiedName(tm))) {
                         origFt = InnerFieldType.SERIALIZABLE;
@@ -1231,12 +1266,11 @@ public class GenDbHandlerAnnotationProcessor implements AnnotationProcessor {
     private static String pickQualifiedName(TypeMirror src) {
         if (src instanceof PrimitiveType) {
             return ((PrimitiveType)src).getKind().name().toLowerCase();
-        } else if (src instanceof EnumType) {
-            return ((EnumType)src).getDeclaration().getQualifiedName();
         } else if (src instanceof ArrayType) {
             return pickQualifiedName(((ArrayType)src).getComponentType()) + "[]";
         } else if (src instanceof DeclaredType) {
-            return ((DeclaredType)src).getDeclaration().getQualifiedName();
+            TypeElement typeElement = (TypeElement)((DeclaredType)src).asElement();
+            return typeElement.getQualifiedName().toString();
         }
         return null;
     }
