@@ -974,7 +974,7 @@ public class GenDbHandlerAnnotationProcessor extends AbstractProcessor {
     private static List<FieldEntry> pickFieldDeclaration(TypeElement td, Messager messager,
             GenDbHandler genDbHandler) {
         List<FieldEntry> fes = new ArrayList<FieldEntry>();
-        List<Element> fds = new ArrayList<Element>(ElementFilter.fieldsIn(td.getEnclosedElements()));
+        List<Element> fds = new ArrayList<Element>(ElementFilter.fieldsIn(Bug300408.getEnclosedElementsDeclarationOrder(td)));
         // Collections.sort(fds, new Comparator<Element>() {
         // @Override
         // public int compare(Element o1, Element o2) {
